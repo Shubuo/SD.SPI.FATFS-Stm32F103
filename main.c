@@ -51,7 +51,6 @@
 #include "stm32f1xx_hal.h"
 #include "fatfs.h"
 
-
 /* USER CODE BEGIN Includes */
 
 #define CMD0 (0x40+0) // GO_IDLE_STATE
@@ -83,15 +82,26 @@
 /* USER CODE END Includes */
 
 /* Private variables ---------------------------------------------------------*/
-SPI_HandleTypeDef 	hspi2;
-UART_HandleTypeDef 	huart1;
+RTC_HandleTypeDef hrtc;
+
+SPI_HandleTypeDef hspi2;
+
+UART_HandleTypeDef huart1;
 
 /* USER CODE BEGIN PV */
 /* Private variables ---------------------------------------------------------*/
+
+RTC_DateTypeDef sDate;
+RTC_TimeTypeDef sTime;
+
 extern int 	i;
 extern int  tmr;
 
 uint8_t 		sect[512];	
+uint8_t 		Time[3];	
+uint8_t			estado = 0;
+uint8_t			teste = 0;
+
 
 uint8_t 		ocr2[5];
 uint8_t 		result;
@@ -101,27 +111,36 @@ uint32_t 		byteswritten,bytesread;
 char 				USER_Path[4]; /* logical drive path */
 extern char st[60];
 char 				sectc[512];
-char 				buffer1[512] = "data medicao auahruheuhe \n";
+char 				taux1[10];
+char 				taux[3];
+char 				buffer1[512] = "ISSO Ai  \n";
 extern char str1[60];
 
 FATFS 			SDFatFs;
 FATFS 			*fs;
 FIL 				MyFile;
+FRESULT     res; 
 
-FRESULT res; 
-
-
-
+signed int	horas 		= 12;
+signed int	hora 		  = 12;
+signed int	minutos 	= 30;
+signed int	segundos 	= 50;
+signed int	dia 			= 15;
+signed int	mes 			= 06;
+signed int  ano 			= 18;
+	
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
+static void MX_RTC_Init(void);
 static void MX_SPI2_Init(void);
 static void MX_USART1_UART_Init(void);
 
 /* USER CODE BEGIN PFP */
 /* Private function prototypes -----------------------------------------------*/
+
 
 /* USER CODE END PFP */
 
@@ -141,16 +160,11 @@ FRESULT ReadLongFile(void)
 
   do{
 
-    if(f_size<512) 	i1=f_size;
-		
+    if(f_size<512) 	i1=f_size;		
     else 						i1=512;
-
     f_size-=i1;
     f_lseek(&MyFile,ind);
     f_read(&MyFile,sect,i1,(UINT *)&bytesread);
-		
-//    for(i=0;i<bytesread;i++) UART
-	
     ind += i1;
 		
   }while(f_size>0);
@@ -179,6 +193,8 @@ FRESULT ReadLongFile(void)
     }
     return fr;
 }
+
+
 
 /* USER CODE END 0 */
 
@@ -212,133 +228,423 @@ int main(void)
   /* USER CODE END SysInit */
 
   /* Initialize all configured peripherals */
-	
-	LCD_INICIALIZA();
-  LCD_LIMPA();	
-	MX_GPIO_Init();
-  MX_SPI2_Init();
+  MX_GPIO_Init();
   MX_FATFS_Init();
+  MX_RTC_Init();
+  MX_SPI2_Init();
   MX_USART1_UART_Init();
-
-	
   /* USER CODE BEGIN 2 */
 	
+	LCD_INICIALIZA();
+
 	LCD_LIMPA();
 	ENVIA_STRING_LCD("PROJETO UNO/IRANI");
-	HAL_Delay(1000);
+	HAL_Delay(800);
+	
+	// Set Time	
+	sTime.Hours = horas;
+	sTime.Minutes = minutos;
+	sTime.Seconds = segundos;
+	HAL_RTC_SetTime(&hrtc,&sTime,RTC_FORMAT_BIN);
+	 
+	// Set Date	
+	sDate.Date = dia;
+	sDate.Month = mes;
+	sDate.Year = ano;
+	HAL_RTC_SetDate(&hrtc,&sDate,RTC_FORMAT_BIN);
 		
-	LCD_LIMPA();	
-	ENVIA_STRING_LCD("Aguardando SD...");
-	HAL_Delay(500);
-	
-	
-//  Inicializacao uSD
-	
-	disk_initialize(SDFatFs.drv);
 
-
-
-	
-// Montar CARTAO uSD
-	
-//		if(f_mount(&SDFatFs,(TCHAR const*)USER_Path,1)!= FR_OK){
-//			
-//			LCD_LIMPA();
-//			ENVIA_STRING_LCD("Erro Montar SD");
-//			Error();
-//						
-//		}
-//		else{
-//			
-//			LCD_LIMPA();
-//			ENVIA_STRING_LCD("Abrindo ARQ...");
-//			HAL_Delay(1000);
-//			
-//			
-//			if(f_open(&MyFile,"data.txt",FA_READ) ==FR_NO_FILE){
-
-//				LCD_LIMPA();
-//				ENVIA_STRING_LCD("f_open=FR_NO_FILE");
-//				Error();
-//			}
-//			
-//			if(f_open(&MyFile,"data.txt",FA_READ) !=  FR_OK){
-
-//				LCD_LIMPA();
-//				ENVIA_STRING_LCD("f_open != FR_OK");
-//				Error();
-//			}
-
-//			else{				
-//				ReadLongFile();				
-//				f_close(&MyFile);	
-//			}
-//		}
-		
-		
-//write -----------------------------------------------------------
-
-if(f_mount(&SDFatFs,(TCHAR const*)USER_Path,0)!= FR_OK){
-
- 				LCD_LIMPA();
-				ENVIA_STRING_LCD("f_mount!=FR_OK");
-				Error();
-}
-
-else{
-	
-		if(open_append(&MyFile,"teste.txt") == FR_OK){ENVIA_STRING_LCD("ASDASDAS");
-				Error();}	
-		f_printf(&MyFile, buffer1);	
-		f_close(&MyFile);
-	
-
-  if(f_open(&MyFile,"data.txt",FA_CREATE_ALWAYS|FA_WRITE)!=FR_OK){
-		
-				LCD_LIMPA();
-				ENVIA_STRING_LCD("f_open!=FR_OK");
-				Error();
-  }
-	
-	
-				LCD_LIMPA();
-				ENVIA_STRING_LCD("Escrevendo...");
-				HAL_Delay(500);
-	
-//    f_write(&MyFile,	buffer1,	sizeof(buffer1),(void*)&byteswritten);	
-//		f_printf(&MyFile, "kkkkkkkkkkkkkkkkkkkkk" );	
-//		f_close(&MyFile);
-	
-	
-//    if((byteswritten==0)||(res!=FR_OK)){
-
-//				LCD_LIMPA();
-//				ENVIA_STRING_LCD("f_write!=FR_OK");
-//				HAL_Delay(1000);
-//    }
-
-    
-  
-}
-		
-				
-	FATFS_UnLinkDriver(USER_Path);
-
-  /* USER CODE END 2 */
-
-  /* Infinite loop */
-  /* USER CODE BEGIN WHILE */
   while (1)
   {
 
-  /* USER CODE END WHILE */
+  switch(estado){
+			
+			case 0:
+			{				
+				if(teste != 1){
+					LCD_LIMPA();
+					ENVIA_STRING_LCD("MENU");
+					teste = 1;	
+				}
+				
+				HAL_RTC_GetTime(&hrtc,&sTime,RTC_FORMAT_BIN);
+				HAL_RTC_GetDate(&hrtc,&sDate,RTC_FORMAT_BIN);
+				minutos = sTime.Minutes;	
+				horas = sTime.Hours;
+				dia = sDate.Date;
+				mes = sDate.Month;
+				ano =	sDate.Year;			
+				sprintf(taux1,"%02d/%02d/%02d",dia,mes,ano);
+				LCD_CURSOR(1,8);	
+  			ENVIA_STRING_LCD(taux1);
+				LCD_CURSOR(0,11);	
+				sprintf(taux,"%02d:%02d",hora,minutos);
+				ENVIA_STRING_LCD(taux);
+				LCD_CURSOR(1,20);				
+				
+				
+				if(HAL_GPIO_ReadPin(BT3_GPIO_Port,BT3_Pin)){
+					while(HAL_GPIO_ReadPin(BT3_GPIO_Port,BT3_Pin));					
+					estado = 1;
+					teste = 0;
+				}	       
+			break; 
+			}
+			
+			case 1:
+			{			
 
-  /* USER CODE BEGIN 3 */
-		
-		
-				LCD_LIMPA();
-				ENVIA_STRING_LCD("Sucesso");
-				Error();
+				HAL_RTC_GetTime(&hrtc,&sTime,RTC_FORMAT_BIN);
+				HAL_RTC_GetDate(&hrtc,&sDate,RTC_FORMAT_BIN);
+				minutos = sTime.Minutes;	
+				horas = sTime.Hours;
+				dia = sDate.Date;
+				mes = sDate.Month;
+				ano =	sDate.Year;			
+				sprintf(taux1,"%02d/%02d/%02d",dia,mes,ano);
+				LCD_CURSOR(1,8);	
+  			ENVIA_STRING_LCD(taux1);
+				LCD_CURSOR(0,11);	
+				sprintf(taux,"%02d:%02d",horas,minutos);
+				ENVIA_STRING_LCD(taux);
+				LCD_CURSOR(1,20);			
+				
+				if(teste != 1){
+					LCD_LIMPA();
+					ENVIA_STRING_LCD("TARA");
+					teste = 1;
+				}
+				
+				if(HAL_GPIO_ReadPin(BT3_GPIO_Port,BT3_Pin)){
+					while(HAL_GPIO_ReadPin(BT3_GPIO_Port,BT3_Pin));
+					LCD_LIMPA();
+					ENVIA_STRING_LCD("OBTENDO TARA");
+					HAL_Delay(1000);
+					LCD_LIMPA();
+					ENVIA_STRING_LCD("SUCESSO");
+					HAL_Delay(1000);
+					teste = 0;
+				}
+								
+				if(HAL_GPIO_ReadPin(BT2_GPIO_Port,BT2_Pin)){
+					while(HAL_GPIO_ReadPin(BT2_GPIO_Port,BT2_Pin));
+					estado = 2;
+					teste = 0;
+				}
+				if(HAL_GPIO_ReadPin(BT1_GPIO_Port,BT1_Pin)){
+					while(HAL_GPIO_ReadPin(BT1_GPIO_Port,BT1_Pin));
+					estado = 3;
+					teste = 0;
+				}       
+			break; 
+			}
+			
+			case 2:
+			{		
+
+				HAL_RTC_GetTime(&hrtc,&sTime,RTC_FORMAT_BIN);
+				HAL_RTC_GetDate(&hrtc,&sDate,RTC_FORMAT_BIN);
+				minutos = sTime.Minutes;	
+				horas = sTime.Hours;
+				dia = sDate.Date;
+				mes = sDate.Month;
+				ano =	sDate.Year;			
+				sprintf(taux1,"%02d/%02d/%02d",dia,mes,ano);
+				LCD_CURSOR(1,8);	
+  			ENVIA_STRING_LCD(taux1);
+				LCD_CURSOR(0,11);	
+				sprintf(taux,"%02d:%02d",horas,minutos);
+				ENVIA_STRING_LCD(taux);
+				LCD_CURSOR(1,20);			
+				
+				if(teste != 1){
+					LCD_LIMPA();
+					ENVIA_STRING_LCD("INICIAR");
+					LCD_CURSOR(1,20);
+					teste = 1;
+					
+				}
+				
+				if(HAL_GPIO_ReadPin(BT3_GPIO_Port,BT3_Pin)){
+					while(HAL_GPIO_ReadPin(BT3_GPIO_Port,BT3_Pin));
+					LCD_LIMPA();
+					ENVIA_STRING_LCD("FORCA");
+
+         //  Inicializacao uSD
+	
+				disk_initialize(SDFatFs.drv);
+					
+				if(SD_Init() != 0){
+					
+					LCD_LIMPA();
+					ENVIA_STRING_LCD("NO SD");
+					HAL_Delay(500);
+				}
+
+				if(f_mount(&SDFatFs,(const char*)USER_Path,0)!= FR_OK){
+
+							LCD_LIMPA();
+							ENVIA_STRING_LCD("f_mount!=FR_OK");
+				}
+
+				else{
+							
+					if(open_append(&MyFile,"MEDICAO.txt") != FR_OK){
+						
+							LCD_LIMPA();
+							ENVIA_STRING_LCD("f_openappend!=FR_OK");
+																
+					}
+					else{	
+						HAL_RTC_GetTime(&hrtc,&sTime,RTC_FORMAT_BIN);
+						HAL_RTC_GetDate(&hrtc,&sDate,RTC_FORMAT_BIN);
+						minutos = sTime.Minutes;	
+						horas = sTime.Hours;
+						dia = sDate.Date;
+						mes = sDate.Month;
+						ano =	sDate.Year;							
+											
+						f_printf(&MyFile, "Data: %02u/%02u/%u, %2u:%02u\n",dia,mes,ano,horas,minutos);
+						f_printf(&MyFile, "FORCA: 123121.1231 \n");			
+						f_close(&MyFile);
+					
+						LCD_LIMPA();
+						ENVIA_STRING_LCD("Escrevendo...");
+						HAL_Delay(1000); 
+					}
+					 
+				}
+							
+				FATFS_UnLinkDriver(USER_Path);
+				teste = 0;
+				}
+								
+				if(HAL_GPIO_ReadPin(BT1_GPIO_Port,BT1_Pin)){
+					while(HAL_GPIO_ReadPin(BT1_GPIO_Port,BT1_Pin));
+					estado = 1;
+					teste = 0;
+				}       
+				else if (HAL_GPIO_ReadPin(BT2_GPIO_Port,BT2_Pin)){
+					while(HAL_GPIO_ReadPin(BT2_GPIO_Port,BT2_Pin));
+					estado = 3;
+					teste = 0;				
+				}
+			break; 
+			}
+			case 3:
+			{				
+				if(teste != 1){
+					LCD_LIMPA();
+					ENVIA_STRING_LCD("DATA/HORA");
+					teste = 1;
+				}
+					
+				HAL_RTC_GetTime(&hrtc,&sTime,RTC_FORMAT_BIN);
+				HAL_RTC_GetDate(&hrtc,&sDate,RTC_FORMAT_BIN);
+				minutos = sTime.Minutes;	
+				horas = sTime.Hours;	
+				dia = sDate.Date;
+				mes = sDate.Month;
+				ano =	sDate.Year;						
+				sprintf(taux1,"%02d/%02d/%02d",dia,mes,ano);
+				LCD_CURSOR(1,8);	
+  			ENVIA_STRING_LCD(taux1);
+				LCD_CURSOR(0,11);	
+				sprintf(taux,"%02d:%02d",horas,minutos);
+				ENVIA_STRING_LCD(taux);
+				LCD_CURSOR(1,20);
+				
+				
+				if(HAL_GPIO_ReadPin(BT3_GPIO_Port,BT3_Pin)){
+					while(HAL_GPIO_ReadPin(BT3_GPIO_Port,BT3_Pin));
+					LCD_LIMPA();
+					ENVIA_STRING_LCD("SELECIONE:");
+					while(HAL_GPIO_ReadPin(BT3_GPIO_Port,BT3_Pin));
+								
+					do{			
+						
+						minutos = sTime.Minutes;	
+						horas = sTime.Hours;	
+						dia = sDate.Date;
+						mes = sDate.Month;
+						ano =	sDate.Year;
+						
+						sprintf(taux1,"%02d:%02d %02d/%02d/%02d",horas,minutos,dia,mes,ano);
+						LCD_CURSOR(1,2);	
+						ENVIA_STRING_LCD(taux1);
+						LCD_CURSOR(1,20);						
+						
+						if(HAL_GPIO_ReadPin(BT2_GPIO_Port,BT2_Pin)){
+							horas += 1;							
+							if(horas > 23){
+								horas = 0;
+							}
+							sTime.Hours = horas;
+							HAL_Delay(50);							
+																												
+						}
+						
+						if(HAL_GPIO_ReadPin(BT1_GPIO_Port,BT1_Pin)){
+							horas -= 1;							
+							if(horas< 0){
+								horas = 23;
+							}
+							sTime.Hours = horas;							
+							HAL_Delay(50);
+						}						
+						
+					}while(HAL_GPIO_ReadPin(BT3_GPIO_Port,BT3_Pin) == 0);
+					while(HAL_GPIO_ReadPin(BT3_GPIO_Port,BT3_Pin));
+					
+					HAL_RTC_SetTime(&hrtc,&sTime,RTC_FORMAT_BIN);
+					HAL_Delay(50);
+					
+					do{			
+						
+						sprintf(taux1,"%02d:%02d %02d/%02d/%02d",horas,minutos,dia,mes,ano);
+						LCD_CURSOR(1,2);	
+						ENVIA_STRING_LCD(taux1);
+						LCD_CURSOR(1,20);						
+						
+						if(HAL_GPIO_ReadPin(BT2_GPIO_Port,BT2_Pin)){
+							minutos += 1;
+								if(minutos > 59){
+									minutos = 0;
+								}							
+								 
+							HAL_Delay(50);
+																					
+						}
+						
+						if(HAL_GPIO_ReadPin(BT1_GPIO_Port,BT1_Pin)){
+							minutos -= 1;
+								if(minutos < 0){
+									minutos = 59;
+								}							
+							HAL_Delay(50);
+						}						
+						
+						
+					}while(HAL_GPIO_ReadPin(BT3_GPIO_Port,BT3_Pin) == 0);
+					while(HAL_GPIO_ReadPin(BT3_GPIO_Port,BT3_Pin));
+					
+					sTime.Minutes = minutos;
+					HAL_RTC_SetTime(&hrtc,&sTime,RTC_FORMAT_BIN);
+					
+					do{			
+						
+						sprintf(taux1,"%02d:%02d %02d/%02d/%02d",horas,minutos,dia,mes,ano);
+						LCD_CURSOR(1,2);	
+						ENVIA_STRING_LCD(taux1);
+						LCD_CURSOR(1,20);						
+						
+						if(HAL_GPIO_ReadPin(BT2_GPIO_Port,BT2_Pin)){
+							dia += 1;
+							if(dia > 31){
+								dia = 1;
+							}							
+							sDate.Date = dia;	 
+							HAL_RTC_SetDate(&hrtc,&sDate,RTC_FORMAT_BIN);
+							HAL_Delay(50);
+																					
+						}
+						
+						if(HAL_GPIO_ReadPin(BT1_GPIO_Port,BT1_Pin)){
+								dia -= 1;
+								if(dia < 1){
+									dia = 31;
+								}							
+							sDate.Date = dia;	 
+							HAL_RTC_SetDate(&hrtc,&sDate,RTC_FORMAT_BIN);
+							HAL_Delay(50);
+						}							
+						
+					}while(HAL_GPIO_ReadPin(BT3_GPIO_Port,BT3_Pin) == 0);
+					while(HAL_GPIO_ReadPin(BT3_GPIO_Port,BT3_Pin));
+					
+					do{			
+						
+						sprintf(taux1,"%02d:%02d %02d/%02d/%02d",horas,minutos,dia,mes,ano);
+						LCD_CURSOR(1,2);	
+						ENVIA_STRING_LCD(taux1);
+						LCD_CURSOR(1,20);						
+						
+						if(HAL_GPIO_ReadPin(BT2_GPIO_Port,BT2_Pin)){
+							mes += 1;
+							if(mes > 12){
+								mes = 0;
+							}							
+							sDate.Month = mes;	 
+							HAL_RTC_SetDate(&hrtc,&sDate,RTC_FORMAT_BIN);
+							HAL_Delay(50);
+																					
+						}
+						
+						if(HAL_GPIO_ReadPin(BT1_GPIO_Port,BT1_Pin)){
+								mes -= 1;
+								if(mes < 0){
+									mes = 12;
+								}							
+							sDate.Month = mes;	 
+							HAL_RTC_SetDate(&hrtc,&sDate,RTC_FORMAT_BIN);
+							HAL_Delay(50);
+						}	
+						
+					}while(HAL_GPIO_ReadPin(BT3_GPIO_Port,BT3_Pin) == 0);
+					while(HAL_GPIO_ReadPin(BT3_GPIO_Port,BT3_Pin));
+					// -------------------------------------------------------------------
+					do{	
+						hora = horas;
+						sprintf(taux1,"%02d:%02d %02d/%02d/%02d",hora,minutos,dia,mes,ano);
+						LCD_CURSOR(1,2);	
+						ENVIA_STRING_LCD(taux1);
+						LCD_CURSOR(1,20);						
+						
+						if(HAL_GPIO_ReadPin(BT2_GPIO_Port,BT2_Pin)){
+							ano += 1;
+							if(ano > 99){
+								ano = 0;
+							}							
+							sDate.Year = ano;	 
+							HAL_RTC_SetDate(&hrtc,&sDate,RTC_FORMAT_BIN);
+							HAL_Delay(50);
+																					
+						}
+						
+						if(HAL_GPIO_ReadPin(BT1_GPIO_Port,BT1_Pin)){
+								ano -= 1;
+								if(ano < 0){
+									ano = 99;
+								}							
+							sDate.Year = ano;	 
+							HAL_RTC_SetDate(&hrtc,&sDate,RTC_FORMAT_BIN);
+							HAL_Delay(50);
+						}	
+												
+					}while(HAL_GPIO_ReadPin(BT3_GPIO_Port,BT3_Pin) == 0);
+					while(HAL_GPIO_ReadPin(BT3_GPIO_Port,BT3_Pin));
+					
+					teste =0;				
+				}
+					
+			if(HAL_GPIO_ReadPin(BT1_GPIO_Port,BT1_Pin)){
+				while(HAL_GPIO_ReadPin(BT1_GPIO_Port,BT1_Pin));
+				estado = 2;
+				teste = 0;
+				
+			}
+			
+			if(HAL_GPIO_ReadPin(BT2_GPIO_Port,BT2_Pin)){
+				while(HAL_GPIO_ReadPin(BT2_GPIO_Port,BT2_Pin));
+				estado = 1;
+				teste = 0;
+			}  			
+				
+			break; 				
+					
+			}								
+				
+			}	
 		
 			
 			
@@ -356,13 +662,15 @@ void SystemClock_Config(void)
 
   RCC_OscInitTypeDef RCC_OscInitStruct;
   RCC_ClkInitTypeDef RCC_ClkInitStruct;
+  RCC_PeriphCLKInitTypeDef PeriphClkInit;
 
     /**Initializes the CPU, AHB and APB busses clocks 
     */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_LSI|RCC_OSCILLATORTYPE_HSE;
   RCC_OscInitStruct.HSEState = RCC_HSE_ON;
   RCC_OscInitStruct.HSEPredivValue = RCC_HSE_PREDIV_DIV1;
   RCC_OscInitStruct.HSIState = RCC_HSI_ON;
+  RCC_OscInitStruct.LSIState = RCC_LSI_ON;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
   RCC_OscInitStruct.PLL.PLLMUL = RCC_PLL_MUL9;
@@ -385,6 +693,13 @@ void SystemClock_Config(void)
     _Error_Handler(__FILE__, __LINE__);
   }
 
+  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_RTC;
+  PeriphClkInit.RTCClockSelection = RCC_RTCCLKSOURCE_LSI;
+  if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
+  {
+    _Error_Handler(__FILE__, __LINE__);
+  }
+
     /**Configure the Systick interrupt time 
     */
   HAL_SYSTICK_Config(HAL_RCC_GetHCLKFreq()/1000);
@@ -395,6 +710,50 @@ void SystemClock_Config(void)
 
   /* SysTick_IRQn interrupt configuration */
   HAL_NVIC_SetPriority(SysTick_IRQn, 0, 0);
+}
+
+/* RTC init function */
+static void MX_RTC_Init(void)
+{
+
+  RTC_TimeTypeDef sTime;
+  RTC_DateTypeDef DateToUpdate;
+
+    /**Initialize RTC Only 
+    */
+  hrtc.Instance = RTC;
+  if(HAL_RTCEx_BKUPRead(&hrtc, RTC_BKP_DR1) != 0x32F2){
+  hrtc.Init.AsynchPrediv = RTC_AUTO_1_SECOND;
+  hrtc.Init.OutPut = RTC_OUTPUTSOURCE_ALARM;
+  if (HAL_RTC_Init(&hrtc) != HAL_OK)
+  {
+    _Error_Handler(__FILE__, __LINE__);
+  }
+
+    /**Initialize RTC and set the Time and Date 
+    */
+  sTime.Hours = 0x12;
+  sTime.Minutes = 0x0;
+  sTime.Seconds = 0x0;
+
+  if (HAL_RTC_SetTime(&hrtc, &sTime, RTC_FORMAT_BCD) != HAL_OK)
+  {
+    _Error_Handler(__FILE__, __LINE__);
+  }
+
+  DateToUpdate.WeekDay = RTC_WEEKDAY_MONDAY;
+  DateToUpdate.Month = RTC_MONTH_JANUARY;
+  DateToUpdate.Date = 0x1;
+  DateToUpdate.Year = 0x18;
+
+  if (HAL_RTC_SetDate(&hrtc, &DateToUpdate, RTC_FORMAT_BCD) != HAL_OK)
+  {
+    _Error_Handler(__FILE__, __LINE__);
+  }
+
+    HAL_RTCEx_BKUPWrite(&hrtc,RTC_BKP_DR1,0x32F2);
+  }
+
 }
 
 /* SPI2 init function */
@@ -409,7 +768,7 @@ static void MX_SPI2_Init(void)
   hspi2.Init.CLKPolarity = SPI_POLARITY_LOW;
   hspi2.Init.CLKPhase = SPI_PHASE_1EDGE;
   hspi2.Init.NSS = SPI_NSS_SOFT;
-  hspi2.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_256;
+  hspi2.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_128;
   hspi2.Init.FirstBit = SPI_FIRSTBIT_MSB;
   hspi2.Init.TIMode = SPI_TIMODE_DISABLE;
   hspi2.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
@@ -465,6 +824,9 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(GPIOA, GPIO_PIN_3|DB4_Pin|DB5_Pin|DB6_Pin 
                           |DB7_Pin|E_Pin|RS_Pin, GPIO_PIN_RESET);
 
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOB, BT3_Pin|BT2_Pin|BT1_Pin, GPIO_PIN_RESET);
+
   /*Configure GPIO pin : PC13 */
   GPIO_InitStruct.Pin = GPIO_PIN_13;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
@@ -479,11 +841,38 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
+  /*Configure GPIO pins : BT3_Pin BT2_Pin BT1_Pin */
+  GPIO_InitStruct.Pin = BT3_Pin|BT2_Pin|BT1_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
 }
 
 /* USER CODE BEGIN 4 */
 
 /* USER CODE END 4 */
+
+/**
+  * @brief  Period elapsed callback in non blocking mode
+  * @note   This function is called  when TIM2 interrupt took place, inside
+  * HAL_TIM_IRQHandler(). It makes a direct call to HAL_IncTick() to increment
+  * a global variable "uwTick" used as application time base.
+  * @param  htim : TIM handle
+  * @retval None
+  */
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+  /* USER CODE BEGIN Callback 0 */
+
+  /* USER CODE END Callback 0 */
+  if (htim->Instance == TIM2) {
+    HAL_IncTick();
+  }
+  /* USER CODE BEGIN Callback 1 */
+
+  /* USER CODE END Callback 1 */
+}
 
 /**
   * @brief  This function is executed in case of error occurrence.
