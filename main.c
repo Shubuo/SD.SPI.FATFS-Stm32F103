@@ -74,22 +74,21 @@
 
 
 
-#define CS_SD_GPIO_PORT GPIOA
-#define CS_SD_PIN GPIO_PIN_3
-#define CS_SD_LOW() HAL_GPIO_WritePin(CS_SD_GPIO_PORT, CS_SD_PIN, GPIO_PIN_RESET)
-#define CS_SD_HIGH() HAL_GPIO_WritePin(CS_SD_GPIO_PORT, CS_SD_PIN, GPIO_PIN_SET)
+#define CS_SD_GPIO_PORT 	GPIOA
+#define CS_SD_PIN 				GPIO_PIN_3
+#define CS_SD_LOW() 			HAL_GPIO_WritePin(CS_SD_GPIO_PORT, CS_SD_PIN, GPIO_PIN_RESET)
+#define CS_SD_HIGH() 			HAL_GPIO_WritePin(CS_SD_GPIO_PORT, CS_SD_PIN, GPIO_PIN_SET)
 
-#define HX_SCK_GPIO_PORT GPIOC
-#define HX_SCK_PIN GPIO_PIN_14
-#define HX_SCK_LOW() HAL_GPIO_WritePin(HX_SCK_GPIO_PORT, HX_SCK_PIN, GPIO_PIN_RESET)
-#define HX_SCK_HIGH() HAL_GPIO_WritePin(HX_SCK_GPIO_PORT, HX_SCK_PIN, GPIO_PIN_SET)
+#define HX_SCK_GPIO_PORT 	GPIOC
+#define HX_SCK_PIN 				GPIO_PIN_14
+#define HX_SCK_LOW() 			HAL_GPIO_WritePin(HX_SCK_GPIO_PORT, HX_SCK_PIN, GPIO_PIN_RESET)
+#define HX_SCK_HIGH()			HAL_GPIO_WritePin(HX_SCK_GPIO_PORT, HX_SCK_PIN, GPIO_PIN_SET)
 
-#define HX_DT_GPIO_PORT GPIOC
-#define HX_DT_PIN GPIO_PIN_15
-#define HX_DT_LOW() HAL_GPIO_WritePin(HX_DT_GPIO_PORT, HX_DT_PIN, GPIO_PIN_RESET)
-#define HX_DT_HIGH() HAL_GPIO_WritePin(HX_DT_GPIO_PORT, HX_DT_PIN, GPIO_PIN_SET)
-
-#define HX_DT_Read() HAL_GPIO_ReadPin(HX_DT_GPIO_PORT, HX_DT_PIN) 
+#define HX_DT_GPIO_PORT 	GPIOC
+#define HX_DT_PIN 				GPIO_PIN_15
+#define HX_DT_LOW() 			HAL_GPIO_WritePin(HX_DT_GPIO_PORT, HX_DT_PIN, GPIO_PIN_RESET)
+#define HX_DT_HIGH() 			HAL_GPIO_WritePin(HX_DT_GPIO_PORT, HX_DT_PIN, GPIO_PIN_SET)
+#define HX_DT_Read() 			HAL_GPIO_ReadPin(HX_DT_GPIO_PORT, HX_DT_PIN) 
 
 /* USER CODE END Includes */
 
@@ -108,26 +107,42 @@ RTC_TimeTypeDef sTime;
 
 extern int 	i;
 extern int  tmr;
+char 				USER_Path[4]; /* logical drive path */
+extern char st[60];
 
 uint8_t 		sect[512];	
 uint8_t 		Time[3];	
 uint8_t			estado = 0;
 uint8_t			teste = 0;
-
-
 uint8_t 		ocr2[5];
 uint8_t 		result;
-uint32_t 		byteswritten,bytesread;
+
+// FIR FILTER:
+//11 Hamming Window
+//double			FIR_C[] = {0.0145489741947061	,0.0305712499252980	,0.0725451577608892	,0.124486576686153	,0.166541934360414	,0.182612214145080,	0.166541934360414,	0.124486576686153,	0.0725451577608892,	0.0305712499252980	,0.0145489741947061	};
+//16 Triangular
+double			FIR_C[] = {0.0610597081690606,	0.0616322647111381	,0.0621255648055849	,0.0625384434486763,	0.0628699247468551	,0.0631192246649620,	0.0632857532350082	,0.0633691162187148,	0.0633691162187148	,0.0632857532350082,	0.0631192246649620	,0.0628699247468551,	0.0625384434486763,	0.0621255648055849	,0.0616322647111381	,0.0610597081690606};
 
 
-char 				USER_Path[4]; /* logical drive path */
-extern char st[60];
-char 				sectc[512];
+
+// IIR FILTER:
+double 			sumA = 0;
+double 			sumB = 0;
+double 			IIR_B[2] ={0.237375515512861,	0.237375515512861};	
+double 			IIR_A[2] ={1,	-0.52524896};	
+
+//double 			IIR_B[3] ={0.000238315522932320	,0.000476631045864640,	0.000238315522932320};
+//double 			IIR_A[3] ={1, -1.96503497983460,	0.966104557493302};	
+
+//double 			IIR_B[5] ={1.47345880526560e-08,	5.89383522106242e-08,	8.84075283159363e-08	,5.89383522106242e-08	,1.47345880526560e-08};
+//double 			IIR_A[5] ={1	,-3.96908538561744,	5.90870411266836	,-3.91012885563580	,0.970510393104559};	
+
+
+double 			y[4] ={0};	
+
+
 char 				taux1[10];
 char 				taux[3];
-char 				buffer1[512] = "ISSO Ai  \n";
-extern char str1[60];
-
 FATFS 			SDFatFs;
 FATFS 			*fs;
 FIL 				MyFile;
@@ -140,7 +155,16 @@ signed int	segundos 	= 50;
 signed int	dia 			= 15;
 signed int	mes 			= 06;
 signed int  ano 			= 18;
-unsigned long auxForce;
+
+unsigned long	sensor[20] = {0};
+
+
+long auxTara 		= 0;
+long auxTara2 	= 0;
+float Tara 			= 0;
+
+float aForce		= 0;
+float Force 		= 0;
 	
 /* USER CODE END PV */
 
@@ -158,32 +182,6 @@ static void MX_USART1_UART_Init(void);
 /* USER CODE END PFP */
 
 /* USER CODE BEGIN 0 */
-
-FRESULT ReadLongFile(void)
-
-{
-
-	uint16_t i=0, i1=0;
-  uint32_t ind=0;
-  uint32_t f_size = MyFile.fsize;
-
-  sprintf(str1,"fsize: %lurn",(unsigned long)f_size);
-
-  ind=0;
-
-  do{
-
-    if(f_size<512) 	i1=f_size;		
-    else 						i1=512;
-    f_size-=i1;
-    f_lseek(&MyFile,ind);
-    f_read(&MyFile,sect,i1,(UINT *)&bytesread);
-    ind += i1;
-		
-  }while(f_size>0);
- 
-  return FR_OK;
-}
 
 /* FRESULT open_append ----------------------------------------------------------*/
 
@@ -231,7 +229,7 @@ void LCD_ShowRTC(void){
 
 }
 
-void SD_Backup(void){
+void SD_Backup(unsigned long dataForce){
 	
 	//  Inicializacao uSD	
 			
@@ -257,7 +255,7 @@ void SD_Backup(void){
 							else{														
 								Update_RTC();					
 								f_printf(&MyFile, "Data: %02u/%02u/%u, %2u:%02u\n",dia,mes,ano,horas,minutos);
-								f_printf(&MyFile, "FORCA: 123121.1231 \n");			
+								f_printf(&MyFile, "FORCA: %lu \n",dataForce);			
 								f_close(&MyFile);
 								
 								
@@ -295,6 +293,83 @@ unsigned long ReadCount(void){
 	return(Count);
 } 
 
+unsigned long moving_average(int M){
+	
+	unsigned long sum = 0;
+
+	for(i=M;i>0;i--){
+		
+		sensor[i] = sensor[i-1];
+	}
+	
+	sensor[0] = ReadCount();
+	sum = 0;
+	
+	for(i=0;i<M;i++){
+		
+		sum = sum + sensor[i];	
+	}
+	
+	return sum/M;
+
+}
+
+
+double FIR(int M){
+	
+	unsigned long sum = 0;
+
+	for(i=M;i>0;i--){
+		
+		sensor[i] = sensor[i-1];
+	}
+	
+	sensor[0] = ReadCount();
+	sum = 0;
+	
+	for(i=0;i<M;i++){
+		
+		sum = sum + sensor[i]*FIR_C[i];	
+	}
+	
+	return sum;
+
+}
+
+double IIR(int M){
+	
+	
+	for(i=M;i>0;i--){
+		
+		sensor[i] = ReadCount();
+	}
+	
+	sensor[0] = ReadCount();
+	
+	sumA = 0;
+	sumB = 0;
+	
+	for(i=0;i<M;i++){
+		
+		sumB = sumB + sensor[i]*IIR_B[i];	
+		
+	}
+	
+	for(i=0;i<(M+1);i++){
+	
+		sumA = sumA + y[i]*IIR_A[i+1];
+	}
+			
+	for(i=0;i<M;i++){
+	
+		y[i+1] = y[i];
+	}	
+	
+	y[0] = sumB - sumA;
+	
+	return (sumB - sumA);
+	
+}
 
 /* USER CODE END 0 */
 
@@ -338,19 +413,15 @@ int main(void)
   /* USER CODE BEGIN 2 */
 	
 	LCD_INICIALIZA();
-	
+		
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  while (1)
-  {
+ 
+	while (1){
 		
-		
-		
-		
-		
-switch(estado){
+		switch(estado){
 			
 			case 0:
 			{				
@@ -387,10 +458,24 @@ switch(estado){
 					while(HAL_GPIO_ReadPin(BT3_GPIO_Port,BT3_Pin));
 					LCD_LIMPA();
 					ENVIA_STRING_LCD("OBTENDO TARA");
-					HAL_Delay(1000);
-					LCD_LIMPA();
-					ENVIA_STRING_LCD("SUCESSO");
-					HAL_Delay(1000);
+					
+					auxTara=0;
+					auxTara2=0;
+					
+					for(i=0;i<20;i++){
+						auxTara = ReadCount();
+						auxTara2 += auxTara;					
+					}
+					
+					Tara = auxTara2/20;
+					
+					
+					sprintf(taux1,"Tara: %f",Tara);
+					LCD_LIMPA();					
+					LCD_CURSOR(0,0);
+					ENVIA_STRING_LCD(taux1);					
+					HAL_Delay(1500);
+										
 					teste = 0;
 				}
 								
@@ -425,6 +510,29 @@ switch(estado){
 					while(HAL_GPIO_ReadPin(BT3_GPIO_Port,BT3_Pin));
 					LCD_LIMPA();
 					
+								
+								
+					while(HAL_GPIO_ReadPin(BT3_GPIO_Port,BT3_Pin) == 0){
+					
+						//aForce = moving_average(100);
+						//aForce = ReadCount();					
+					
+											
+						//aForce = FIR(16);	
+						aForce =	IIR(2);						
+						Force = (aForce - Tara)*(0.00238);
+						
+						
+						LCD_CURSOR(0,0);
+						//LCD_LIMPA();
+						sprintf(taux1,"Forca: %.02f",Force);						
+						ENVIA_STRING_LCD(taux1);	
+																	
+					}while(HAL_GPIO_ReadPin(BT3_GPIO_Port,BT3_Pin));
+					
+					teste = 0;
+					
+										
 
          //  Inicializacao uSD				
 					
@@ -435,19 +543,8 @@ switch(estado){
 //					teste=0;
 //				}
 //				else{					
-//					SD_Backup();					
-//				}			
-					
-					
-					while(HAL_GPIO_ReadPin(BT3_GPIO_Port,BT3_Pin) == 0){
-					auxForce =	 ReadCount();
-					sprintf(taux1,"Forca: %lu",auxForce);
-					LCD_CURSOR(0,0);
-					ENVIA_STRING_LCD(taux1);	
-					HAL_Delay(200);
-						teste =0;
-					}						
-				
+//					SD_Backup((Force));					
+//				}						
 				}
 								
 				if(HAL_GPIO_ReadPin(BT1_GPIO_Port,BT1_Pin)){
@@ -479,8 +576,7 @@ switch(estado){
 					ENVIA_STRING_LCD("SELECIONE:");
 					while(HAL_GPIO_ReadPin(BT3_GPIO_Port,BT3_Pin));
 								
-					do{			
-						
+					do{									
 									
 						sprintf(taux1,"%02d:%02d %02d/%02d/%02d",horas,minutos,dia,mes,ano);
 						LCD_CURSOR(1,2);	
