@@ -106,47 +106,32 @@ RTC_DateTypeDef sDate;
 RTC_TimeTypeDef sTime;
 
 extern int 	i;
-extern int  tmr;
-char 				USER_Path[4]; /* logical drive path */
-extern char st[60];
 
-uint8_t 		sect[512];	
-uint8_t 		Time[3];	
 uint8_t			estado = 0;
 uint8_t			teste = 0;
-uint8_t 		ocr2[5];
 uint8_t 		result;
-
-// FIR FILTER:
-//11 Hamming Window
-//double			FIR_C[] = {0.0145489741947061	,0.0305712499252980	,0.0725451577608892	,0.124486576686153	,0.166541934360414	,0.182612214145080,	0.166541934360414,	0.124486576686153,	0.0725451577608892,	0.0305712499252980	,0.0145489741947061	};
-//16 Triangular
-double			FIR_C[] = {0.0610597081690606,	0.0616322647111381	,0.0621255648055849	,0.0625384434486763,	0.0628699247468551	,0.0631192246649620,	0.0632857532350082	,0.0633691162187148,	0.0633691162187148	,0.0632857532350082,	0.0631192246649620	,0.0628699247468551,	0.0625384434486763,	0.0621255648055849	,0.0616322647111381	,0.0610597081690606};
-
-
-
-// IIR FILTER:
-double 			sumA = 0;
-double 			sumB = 0;
-double 			IIR_B[2] ={0.237375515512861,	0.237375515512861};	
-double 			IIR_A[2] ={1,	-0.52524896};	
-
-//double 			IIR_B[3] ={0.000238315522932320	,0.000476631045864640,	0.000238315522932320};
-//double 			IIR_A[3] ={1, -1.96503497983460,	0.966104557493302};	
-
-//double 			IIR_B[5] ={1.47345880526560e-08,	5.89383522106242e-08,	8.84075283159363e-08	,5.89383522106242e-08	,1.47345880526560e-08};
-//double 			IIR_A[5] ={1	,-3.96908538561744,	5.90870411266836	,-3.91012885563580	,0.970510393104559};	
-
-
-double 			y[4] ={0};	
-
 
 char 				taux1[10];
 char 				taux[3];
+
+unsigned long	sensor[20] = {0};
+
+// ----------------------------------- MEDICAO -------------------------------------
+
+
+float Tara 			= 0;
+float aForce		= 0;
+float Force 		= 0;
+
+// ----------------------------------- uSD -------------------------------------
+
 FATFS 			SDFatFs;
 FATFS 			*fs;
 FIL 				MyFile;
-FRESULT     res; 
+FRESULT     res;
+char 				USER_Path[4]; /* logical drive path */
+
+// ----------------------------------- RTC -------------------------------------
 
 signed int	horas 		= 12;
 signed int	hora 		  = 12;
@@ -156,15 +141,36 @@ signed int	dia 			= 15;
 signed int	mes 			= 06;
 signed int  ano 			= 18;
 
-unsigned long	sensor[20] = {0};
+// ----------------------------------- Kalman`s FILTER -------------------------------------
+
+float KG = 0 ;
+float MEA = 0;
+
+float ERROR_E0 = 20;
+float ERROR_E1 = 0;
+
+int		ERROR_MEA = 5;
+
+double E_E0 = 0;					//Estimativa Futura - Primeira previsao = Tara
+double E_E1 = 0;					//Estimativa Passada
+
+// ----------------------------------- FIR FILTER -------------------------------------------
+
+// Hamming Window (11)
+//double			FIR_C[] = {0.0145489741947061	,0.0305712499252980	,0.0725451577608892	,0.124486576686153	,0.166541934360414	,0.182612214145080,	0.166541934360414,	0.124486576686153,	0.0725451577608892,	0.0305712499252980	,0.0145489741947061	};
+
+// Triangular (16)
+double			FIR_C[] = {0.0610597081690606,	0.0616322647111381	,0.0621255648055849	,0.0625384434486763,	0.0628699247468551	,0.0631192246649620,	0.0632857532350082	,0.0633691162187148,	0.0633691162187148	,0.0632857532350082,	0.0631192246649620	,0.0628699247468551,	0.0625384434486763,	0.0621255648055849	,0.0616322647111381	,0.0610597081690606};
 
 
-long auxTara 		= 0;
-long auxTara2 	= 0;
-float Tara 			= 0;
 
-float aForce		= 0;
-float Force 		= 0;
+// ----------------------------------- IIR FILTER: -------------------------------------------
+double 			sumA = 0;
+double 			sumB = 0;
+double 			IIR_B[3] ={0.000238	,0.000476,	0.000238};
+double 			IIR_A[3] ={1, -1.9650,	0.9661};	
+double 			y[10] ={0};
+
 	
 /* USER CODE END PV */
 
@@ -206,7 +212,7 @@ static void MX_USART1_UART_Init(void);
 }
 	
 
-void Update_RTC(void){
+void 					Update_RTC(void){
 	
 	HAL_RTC_GetTime(&hrtc,&sTime,RTC_FORMAT_BIN);
 	HAL_RTC_GetDate(&hrtc,&sDate,RTC_FORMAT_BIN);
@@ -217,7 +223,7 @@ void Update_RTC(void){
 	ano =	sDate.Year;
 }
 
-void LCD_ShowRTC(void){
+void 					LCD_ShowRTC(void){
 	
 	sprintf(taux1,"%02d/%02d/%02d",dia,mes,ano);
 	LCD_CURSOR(1,8);	
@@ -229,7 +235,7 @@ void LCD_ShowRTC(void){
 
 }
 
-void SD_Backup(unsigned long dataForce){
+void 					SD_Backup(unsigned long dataForce){
 	
 	//  Inicializacao uSD	
 			
@@ -315,7 +321,7 @@ unsigned long moving_average(int M){
 }
 
 
-double FIR(int M){
+double 				FIR(int M){
 	
 	unsigned long sum = 0;
 
@@ -336,7 +342,7 @@ double FIR(int M){
 
 }
 
-double IIR(int M){
+double 				IIR(int M){
 	
 	
 	for(i=M;i>0;i--){
@@ -355,7 +361,7 @@ double IIR(int M){
 		
 	}
 	
-	for(i=0;i<(M+1);i++){
+	for(i=0;i<(M-1);i++){
 	
 		sumA = sumA + y[i]*IIR_A[i+1];
 	}
@@ -369,6 +375,43 @@ double IIR(int M){
 	
 	return (sumB - sumA);
 	
+}
+
+double 				Kalmans(void){
+	
+	// Valor Medido
+	MEA = ReadCount();
+	
+	// Kalmans Filter Gain
+	KG = ERROR_E0/(ERROR_E0 + ERROR_MEA);
+		
+	// Updating Estimative
+	E_E1 = E_E0;
+	E_E0 = E_E1 + KG*(MEA - E_E1);
+	
+	// Updating Error	
+	ERROR_E1 = ERROR_E0;	
+	ERROR_E0 = (1-KG)*ERROR_E1;
+	
+	return E_E0;
+	
+	
+}
+
+float 				Get_Tara(void){
+	
+	long 	auxTara 	= 0;
+	long 	auxTara2 	= 0;
+							
+	for(i=0;i<20;i++){
+		
+		auxTara = ReadCount();
+		auxTara2 += auxTara;
+		
+	}
+					
+	Tara = auxTara2/20;
+	return Tara;
 }
 
 /* USER CODE END 0 */
@@ -458,24 +501,9 @@ int main(void)
 					while(HAL_GPIO_ReadPin(BT3_GPIO_Port,BT3_Pin));
 					LCD_LIMPA();
 					ENVIA_STRING_LCD("OBTENDO TARA");
-					
-					auxTara=0;
-					auxTara2=0;
-					
-					for(i=0;i<20;i++){
-						auxTara = ReadCount();
-						auxTara2 += auxTara;					
-					}
-					
-					Tara = auxTara2/20;
-					
-					
-					sprintf(taux1,"Tara: %f",Tara);
-					LCD_LIMPA();					
-					LCD_CURSOR(0,0);
-					ENVIA_STRING_LCD(taux1);					
-					HAL_Delay(1500);
-										
+			
+					Tara = Get_Tara();
+								
 					teste = 0;
 				}
 								
@@ -504,22 +532,27 @@ int main(void)
 					LCD_CURSOR(1,20);
 					teste = 1;
 					
+					
 				}
 				
 				if(HAL_GPIO_ReadPin(BT3_GPIO_Port,BT3_Pin)){
 					while(HAL_GPIO_ReadPin(BT3_GPIO_Port,BT3_Pin));
 					LCD_LIMPA();
+					ENVIA_STRING_LCD("Obtendo Tara...");
+					Tara = Get_Tara();
+					LCD_LIMPA();
 					
-								
+					// KALMANS
+					E_E0 = Tara;
 								
 					while(HAL_GPIO_ReadPin(BT3_GPIO_Port,BT3_Pin) == 0){
 					
-						//aForce = moving_average(100);
+						
 						//aForce = ReadCount();					
-					
-											
+						aForce = moving_average(15);											
 						//aForce = FIR(16);	
-						aForce =	IIR(2);						
+						//aForce = IIR(3);	
+						//aForce = Kalmans();
 						Force = (aForce - Tara)*(0.00238);
 						
 						
