@@ -97,7 +97,7 @@ RTC_HandleTypeDef hrtc;
 
 SPI_HandleTypeDef hspi2;
 
-UART_HandleTypeDef huart1;
+UART_HandleTypeDef huart3;
 
 /* USER CODE BEGIN PV */
 /* Private variables ---------------------------------------------------------*/
@@ -107,13 +107,16 @@ RTC_TimeTypeDef sTime;
 
 extern int 	i;
 
-uint8_t			estado = 0;
-uint8_t			teste = 0;
-uint8_t 		result;
+uint8_t		estado = 0;
+uint8_t		teste = 0;
+uint8_t 	result;
+
+uint8_t UART_RX[1];
+uint8_t UART_TX[8] = "1350.0\n";
+
 
 char 				taux1[10];
 char 				taux[3];
-
 unsigned long	sensor[20] = {0};
 
 // ----------------------------------- MEDICAO -------------------------------------
@@ -179,7 +182,7 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_RTC_Init(void);
 static void MX_SPI2_Init(void);
-static void MX_USART1_UART_Init(void);
+static void MX_USART3_UART_Init(void);
 
 /* USER CODE BEGIN PFP */
 /* Private function prototypes -----------------------------------------------*/
@@ -452,344 +455,91 @@ int main(void)
   MX_FATFS_Init();
   MX_RTC_Init();
   MX_SPI2_Init();
-  MX_USART1_UART_Init();
+  MX_USART3_UART_Init();
   /* USER CODE BEGIN 2 */
 	
-	LCD_INICIALIZA();
-		
+	
+	LCD_INICIALIZA();			
+	//	__HAL_UART_ENABLE_IT(&huart3,UART_IT_TC);	
+	
+	__HAL_UART_ENABLE_IT(&huart3,UART_IT_RXNE);	
+	ENVIA_STRING_LCD("MENU");
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
- 
-	while (1){
+  while (1){
 		
-		switch(estado){
+		
+		 switch(estado){
 			
-			case 0:
+			case 0x01:
 			{				
-				if(teste != 1){
-					LCD_LIMPA();
-					ENVIA_STRING_LCD("MENU");
-					teste = 1;	
-				}
-				
-				Update_RTC();
-				LCD_ShowRTC();
-								
-				if(HAL_GPIO_ReadPin(BT3_GPIO_Port,BT3_Pin)){
-					while(HAL_GPIO_ReadPin(BT3_GPIO_Port,BT3_Pin));					
-					estado = 1;
-					teste = 0;
-				}	       
-			break; 
-			}
-			
-			case 1:
-			{			
-
-				Update_RTC();
-				LCD_ShowRTC();			
-				
-				if(teste != 1){
-					LCD_LIMPA();
-					ENVIA_STRING_LCD("TARA");
-					teste = 1;
-				}
-				
-				if(HAL_GPIO_ReadPin(BT3_GPIO_Port,BT3_Pin)){
-					while(HAL_GPIO_ReadPin(BT3_GPIO_Port,BT3_Pin));
-					LCD_LIMPA();
-					ENVIA_STRING_LCD("OBTENDO TARA");
-			
-					Tara = Get_Tara();
-								
-					teste = 0;
-				}
-								
-				if(HAL_GPIO_ReadPin(BT2_GPIO_Port,BT2_Pin)){
-					while(HAL_GPIO_ReadPin(BT2_GPIO_Port,BT2_Pin));
-					estado = 2;
-					teste = 0;
-				}
-				if(HAL_GPIO_ReadPin(BT1_GPIO_Port,BT1_Pin)){
-					while(HAL_GPIO_ReadPin(BT1_GPIO_Port,BT1_Pin));
-					estado = 3;
-					teste = 0;
-				}       
-			break; 
-			}
-			
-			case 2:
-			{		
-
-				Update_RTC();
-				LCD_ShowRTC();			
-				
 				if(teste != 1){
 					LCD_LIMPA();
 					ENVIA_STRING_LCD("INICIAR");
-					LCD_CURSOR(1,20);
-					teste = 1;
-					
-					
-				}
-				
-				if(HAL_GPIO_ReadPin(BT3_GPIO_Port,BT3_Pin)){
-					while(HAL_GPIO_ReadPin(BT3_GPIO_Port,BT3_Pin));
-					LCD_LIMPA();
-					ENVIA_STRING_LCD("Obtendo Tara...");
+					teste = 1;	
 					Tara = Get_Tara();
-					LCD_LIMPA();
-					
-					// KALMANS
-					E_E0 = Tara;
-								
-					while(HAL_GPIO_ReadPin(BT3_GPIO_Port,BT3_Pin) == 0){
-					
-						
-						//aForce = ReadCount();					
-						aForce = moving_average(15);											
-						//aForce = FIR(16);	
-						//aForce = IIR(3);	
-						//aForce = Kalmans();
-						Force = (aForce - Tara)*(0.00238);
-						
-						
-						LCD_CURSOR(0,0);
-						//LCD_LIMPA();
-						sprintf(taux1,"Forca: %.02f",Force);						
-						ENVIA_STRING_LCD(taux1);	
-																	
-					}while(HAL_GPIO_ReadPin(BT3_GPIO_Port,BT3_Pin));
-					
-					teste = 0;
-					
-										
-
-         //  Inicializacao uSD				
-					
-//				if(SD_Init() != 0){					
+				}		
+				
 //					LCD_LIMPA();
-//					ENVIA_STRING_LCD("NO SD");
-//					HAL_Delay(500);		
-//					teste=0;
-//				}
-//				else{					
-//					SD_Backup((Force));					
-//				}						
-				}
-								
-				if(HAL_GPIO_ReadPin(BT1_GPIO_Port,BT1_Pin)){
-					while(HAL_GPIO_ReadPin(BT1_GPIO_Port,BT1_Pin));
-					estado = 1;
-					teste = 0;
-				}       
-				else if (HAL_GPIO_ReadPin(BT2_GPIO_Port,BT2_Pin)){
-					while(HAL_GPIO_ReadPin(BT2_GPIO_Port,BT2_Pin));
-					estado = 3;
-					teste = 0;				
-				}
+//					ENVIA_STRING_LCD("Obtendo Tara...");
+					
+					LCD_LIMPA();
+					aForce = ReadCount();	
+					Force = ((aForce - Tara)*(0.00238));
+//				
+					LCD_CURSOR(0,0);
+					sprintf(taux1,"%.02f",Force);						
+					ENVIA_STRING_LCD(taux1);			
+				
+					HAL_UART_Transmit(&huart3, taux1 ,sizeof(taux1), 100);
+					HAL_Delay(100);
+				
 			break; 
 			}
-			case 3:
-			{				
+			
+			case 0x03:
+			{					
 				if(teste != 1){
 					LCD_LIMPA();
-					ENVIA_STRING_LCD("DATA/HORA");
+					ENVIA_STRING_LCD("GRAFICO");
 					teste = 1;
 				}
-					
-				Update_RTC();
-				LCD_ShowRTC();				
-				
-				if(HAL_GPIO_ReadPin(BT3_GPIO_Port,BT3_Pin)){
-					while(HAL_GPIO_ReadPin(BT3_GPIO_Port,BT3_Pin));
-					LCD_LIMPA();
-					ENVIA_STRING_LCD("SELECIONE:");
-					while(HAL_GPIO_ReadPin(BT3_GPIO_Port,BT3_Pin));
-								
-					do{									
-									
-						sprintf(taux1,"%02d:%02d %02d/%02d/%02d",horas,minutos,dia,mes,ano);
-						LCD_CURSOR(1,2);	
-						ENVIA_STRING_LCD(taux1);
-						LCD_CURSOR(1,20);						
-						
-						if(HAL_GPIO_ReadPin(BT2_GPIO_Port,BT2_Pin)){
-							horas += 1;							
-							if(horas > 23){
-								horas = 0;
-							}
-							sTime.Hours = horas;
-							HAL_Delay(50);							
-																												
-						}
-						
-						if(HAL_GPIO_ReadPin(BT1_GPIO_Port,BT1_Pin)){
-							horas -= 1;							
-							if(horas< 0){
-								horas = 23;
-							}
-							sTime.Hours = horas;
-							HAL_Delay(50);
-						}						
-						
-					}while(HAL_GPIO_ReadPin(BT3_GPIO_Port,BT3_Pin) == 0);
-					while(HAL_GPIO_ReadPin(BT3_GPIO_Port,BT3_Pin));
-					
-					HAL_RTC_SetTime(&hrtc,&sTime,RTC_FORMAT_BIN);
-					HAL_Delay(50);
-					
-					do{			
-						
-						sprintf(taux1,"%02d:%02d %02d/%02d/%02d",horas,minutos,dia,mes,ano);
-						LCD_CURSOR(1,2);	
-						ENVIA_STRING_LCD(taux1);
-						LCD_CURSOR(1,20);						
-						
-						if(HAL_GPIO_ReadPin(BT2_GPIO_Port,BT2_Pin)){
-							minutos += 1;
-								if(minutos > 59){
-									minutos = 0;
-								}							
-								 
-							HAL_Delay(50);
-																					
-						}
-						
-						if(HAL_GPIO_ReadPin(BT1_GPIO_Port,BT1_Pin)){
-							minutos -= 1;
-								if(minutos < 0){
-									minutos = 59;
-								}							
-							HAL_Delay(50);
-						}						
-						
-						
-					}while(HAL_GPIO_ReadPin(BT3_GPIO_Port,BT3_Pin) == 0);
-					while(HAL_GPIO_ReadPin(BT3_GPIO_Port,BT3_Pin));
-					
-					sTime.Minutes = minutos;
-					HAL_RTC_SetTime(&hrtc,&sTime,RTC_FORMAT_BIN);
-					
-					do{			
-						
-						sprintf(taux1,"%02d:%02d %02d/%02d/%02d",horas,minutos,dia,mes,ano);
-						LCD_CURSOR(1,2);	
-						ENVIA_STRING_LCD(taux1);
-						LCD_CURSOR(1,20);						
-						
-						if(HAL_GPIO_ReadPin(BT2_GPIO_Port,BT2_Pin)){
-							dia += 1;
-							if(dia > 31){
-								dia = 1;
-							}							
-							sDate.Date = dia;	 
-							HAL_RTC_SetDate(&hrtc,&sDate,RTC_FORMAT_BIN);
-							HAL_Delay(50);
-																					
-						}
-						
-						if(HAL_GPIO_ReadPin(BT1_GPIO_Port,BT1_Pin)){
-								dia -= 1;
-								if(dia < 1){
-									dia = 31;
-								}							
-							sDate.Date = dia;	 
-							HAL_RTC_SetDate(&hrtc,&sDate,RTC_FORMAT_BIN);
-							HAL_Delay(50);
-						}							
-						
-					}while(HAL_GPIO_ReadPin(BT3_GPIO_Port,BT3_Pin) == 0);
-					while(HAL_GPIO_ReadPin(BT3_GPIO_Port,BT3_Pin));
-					
-					do{			
-						
-						sprintf(taux1,"%02d:%02d %02d/%02d/%02d",horas,minutos,dia,mes,ano);
-						LCD_CURSOR(1,2);	
-						ENVIA_STRING_LCD(taux1);
-						LCD_CURSOR(1,20);						
-						
-						if(HAL_GPIO_ReadPin(BT2_GPIO_Port,BT2_Pin)){
-							mes += 1;
-							if(mes > 12){
-								mes = 0;
-							}							
-							sDate.Month = mes;	 
-							HAL_RTC_SetDate(&hrtc,&sDate,RTC_FORMAT_BIN);
-							HAL_Delay(50);
-																					
-						}
-						
-						if(HAL_GPIO_ReadPin(BT1_GPIO_Port,BT1_Pin)){
-								mes -= 1;
-								if(mes < 0){
-									mes = 12;
-								}							
-							sDate.Month = mes;	 
-							HAL_RTC_SetDate(&hrtc,&sDate,RTC_FORMAT_BIN);
-							HAL_Delay(50);
-						}	
-						
-					}while(HAL_GPIO_ReadPin(BT3_GPIO_Port,BT3_Pin) == 0);
-					while(HAL_GPIO_ReadPin(BT3_GPIO_Port,BT3_Pin));
-					// -------------------------------------------------------------------
-					do{	
-						hora = horas;
-						sprintf(taux1,"%02d:%02d %02d/%02d/%02d",hora,minutos,dia,mes,ano);
-						LCD_CURSOR(1,2);	
-						ENVIA_STRING_LCD(taux1);
-						LCD_CURSOR(1,20);						
-						
-						if(HAL_GPIO_ReadPin(BT2_GPIO_Port,BT2_Pin)){
-							ano += 1;
-							if(ano > 99){
-								ano = 0;
-							}							
-							sDate.Year = ano;	 
-							HAL_RTC_SetDate(&hrtc,&sDate,RTC_FORMAT_BIN);
-							HAL_Delay(50);
-																					
-						}
-						
-						if(HAL_GPIO_ReadPin(BT1_GPIO_Port,BT1_Pin)){
-								ano -= 1;
-								if(ano < 0){
-									ano = 99;
-								}							
-							sDate.Year = ano;	 
-							HAL_RTC_SetDate(&hrtc,&sDate,RTC_FORMAT_BIN);
-							HAL_Delay(50);
-						}	
-												
-					}while(HAL_GPIO_ReadPin(BT3_GPIO_Port,BT3_Pin) == 0);
-					while(HAL_GPIO_ReadPin(BT3_GPIO_Port,BT3_Pin));
-					
-					teste =0;				
-				}
-					
-			if(HAL_GPIO_ReadPin(BT1_GPIO_Port,BT1_Pin)){
-				while(HAL_GPIO_ReadPin(BT1_GPIO_Port,BT1_Pin));
-				estado = 2;
-				teste = 0;
-				
+							      
+			break; 
 			}
 			
-			if(HAL_GPIO_ReadPin(BT2_GPIO_Port,BT2_Pin)){
-				while(HAL_GPIO_ReadPin(BT2_GPIO_Port,BT2_Pin));
-				estado = 1;
-				teste = 0;
-			}  			
-				
-			break; 				
-					
-			}								
-				
-			}	
-		
+			case 0x05:
+			{					
+				if(teste != 1){
+					LCD_LIMPA();
+					ENVIA_STRING_LCD("RTC");
+					teste = 1;
+				}
+							      
+			break; 
+			}
 			
-			
+			case 0x09:
+			{					
+				if(teste != 1){
+					LCD_LIMPA();
+					ENVIA_STRING_LCD("MENU");
+					teste = 1;
+				}
+							      
+			break; 
+			}
+		}
+  /* USER CODE END WHILE */
+
+  /* USER CODE BEGIN 3 */
+	
+	//	HAL_UART_Transmit(&huart3, UART_TX, sizeof(UART_TX),100);
+	//	HAL_Delay(500);
+
   }
   /* USER CODE END 3 */
 
@@ -922,19 +672,19 @@ static void MX_SPI2_Init(void)
 
 }
 
-/* USART1 init function */
-static void MX_USART1_UART_Init(void)
+/* USART3 init function */
+static void MX_USART3_UART_Init(void)
 {
 
-  huart1.Instance = USART1;
-  huart1.Init.BaudRate = 115200;
-  huart1.Init.WordLength = UART_WORDLENGTH_8B;
-  huart1.Init.StopBits = UART_STOPBITS_1;
-  huart1.Init.Parity = UART_PARITY_NONE;
-  huart1.Init.Mode = UART_MODE_TX_RX;
-  huart1.Init.HwFlowCtl = UART_HWCONTROL_NONE;
-  huart1.Init.OverSampling = UART_OVERSAMPLING_16;
-  if (HAL_UART_Init(&huart1) != HAL_OK)
+  huart3.Instance = USART3;
+  huart3.Init.BaudRate = 9600;
+  huart3.Init.WordLength = UART_WORDLENGTH_8B;
+  huart3.Init.StopBits = UART_STOPBITS_1;
+  huart3.Init.Parity = UART_PARITY_NONE;
+  huart3.Init.Mode = UART_MODE_TX_RX;
+  huart3.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  huart3.Init.OverSampling = UART_OVERSAMPLING_16;
+  if (HAL_UART_Init(&huart3) != HAL_OK)
   {
     _Error_Handler(__FILE__, __LINE__);
   }
@@ -998,6 +748,19 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+
+//void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart){
+
+//	
+//	
+//}
+
+//void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart){
+//	
+//	
+//	__NOP();
+//		
+//}
 
 /* USER CODE END 4 */
 
