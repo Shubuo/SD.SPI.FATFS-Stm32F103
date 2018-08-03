@@ -51,6 +51,7 @@
 #include "stm32f1xx_hal.h"
 #include "fatfs.h"
 
+
 /* USER CODE BEGIN Includes */
 
 #define CMD0 (0x40+0) // GO_IDLE_STATE
@@ -71,7 +72,8 @@
 #include "LCD162A.h"
 #include "ff_gen_drv.h"
 #include "user_diskio.h"
-
+#include "stdio.h"
+#include "math.h"
 
 
 #define CS_SD_GPIO_PORT 	GPIOA
@@ -115,16 +117,16 @@ uint8_t UART_RX[1];
 uint8_t UART_TX[8] = "1350.0\n";
 
 
-char 				taux1[10];
+char 				taux1[8];
 char 				taux[3];
 unsigned long	sensor[20] = {0};
 
 // ----------------------------------- MEDICAO -------------------------------------
 
 
-float Tara 			= 0;
-float aForce		= 0;
-float Force 		= 0;
+double Tara 			= 0;
+double aForce		= 0;
+double Force 		= 0;
 
 // ----------------------------------- uSD -------------------------------------
 
@@ -401,7 +403,7 @@ double 				Kalmans(void){
 	
 }
 
-float 				Get_Tara(void){
+double 				Get_Tara(void){
 	
 	long 	auxTara 	= 0;
 	long 	auxTara2 	= 0;
@@ -488,14 +490,14 @@ int main(void)
 					
 					LCD_LIMPA();
 					aForce = ReadCount();	
-					Force = ((aForce - Tara)*(0.00238));
+					Force = fabs((aForce - Tara)*(0.00238));
 //				
 					LCD_CURSOR(0,0);
-					sprintf(taux1,"%.02f",Force);						
+					sprintf(taux1,"%7.2f",Force);						
 					ENVIA_STRING_LCD(taux1);			
 				
 					HAL_UART_Transmit(&huart3, taux1 ,sizeof(taux1), 100);
-					HAL_Delay(100);
+					HAL_Delay(500);
 				
 			break; 
 			}
