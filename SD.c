@@ -1,5 +1,7 @@
 #include "SD.h"
 #include "LCD162A.h"
+#include "ff_gen_drv.h"
+#include "user_diskio.h"
 
 #define CMD0 		(0x40+0) // GO_IDLE_STATE
 #define CMD1 		(0x40+1) // SEND_OP_COND (MMC)
@@ -19,6 +21,7 @@
 
 extern SPI_HandleTypeDef hspi2;
 uint8_t i = 0;
+uint32_t timer = 0;
 uint8_t ocr[4];
 char str1[60]={0};
 uint8_t tmr;
@@ -30,9 +33,9 @@ void Error(void){
 
   while(1){
 		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_RESET);
-		HAL_Delay(50);
+		HAL_Delay(200);
     HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_SET);
-		HAL_Delay(50);
+		HAL_Delay(200);
 	}
 
   
@@ -194,9 +197,9 @@ uint16_t cnt;
 	
 	if (SD_cmd(CMD17, sector)!=0x00) 		
 	{		
-		LCD_LIMPA();
-		ENVIA_STRING_LCD("Erro1 ReadBlock");
-		HAL_Delay(800); 	
+//		LCD_LIMPA();
+//		ENVIA_STRING_LCD("Erro1 ReadBlock");
+//		HAL_Delay(800); 	
 	}
 	
 	cnt=0;
@@ -210,9 +213,9 @@ uint16_t cnt;
 
   if (cnt>=0xFFFF)
 		{
-		LCD_LIMPA();
-		ENVIA_STRING_LCD("Erro2 ReadBlock");
-		HAL_Delay(800); 
+//		LCD_LIMPA();
+//		ENVIA_STRING_LCD("Erro2 ReadBlock");
+//		HAL_Delay(800); 
 		}
 
   for (cnt=0;cnt<512;cnt++) 
@@ -241,6 +244,8 @@ void LED_Blink(uint8_t tempo){
 int SD_Init(void)
 
 {
+	timer = 0;
+	Init = 0;
 
   while(Init == 0){
 		
@@ -286,20 +291,22 @@ int SD_Init(void)
 							SPI_Release();
 							tmr = SD_cmd(CMD1, 0x40000000); 
 
-							}
-							
-							LCD_LIMPA();
-							ENVIA_STRING_LCD("SD Inicializado...");
-							HAL_Delay(2000);
-							
-							SPI_Release();
-							Init = 1;		
-							return 0;
+						}
+												
+						SPI_Release();
+						Init = 1;		
+						return 0;
 																										
 				    }	
 			}
+				
 		}	
+			timer++;
+			if(timer > 5)
+				break;
 	}
+	
+	return 1;
 }
 
 //-----------------------------------------------
@@ -325,6 +332,7 @@ uint8_t SPI_wait_ready(void)
 
 }
 
-//-----------------------------------------------
+
+
 
 /* END -----------------------------------------------*/

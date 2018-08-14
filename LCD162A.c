@@ -172,3 +172,5 @@ void ENVIA_STRING_LCD (char *str)
 		}
 	HAL_Delay(1);
 	}
+	
+	

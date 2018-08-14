@@ -223,7 +223,7 @@ DRESULT USER_read (
 		}
 	
 		CS_SD_HIGH();
-		SPI_Release();
+		
 
 		return count ? RES_ERROR : RES_OK;
     

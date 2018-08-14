@@ -51,7 +51,6 @@
 #include "stm32f1xx_hal.h"
 #include "fatfs.h"
 
-
 /* USER CODE BEGIN Includes */
 
 #define CMD0 (0x40+0) // GO_IDLE_STATE
@@ -74,7 +73,7 @@
 #include "user_diskio.h"
 #include "stdio.h"
 #include "math.h"
-
+#include "stdbool.h"
 
 #define CS_SD_GPIO_PORT 	GPIOA
 #define CS_SD_PIN 				GPIO_PIN_3
@@ -99,6 +98,8 @@ RTC_HandleTypeDef hrtc;
 
 SPI_HandleTypeDef hspi2;
 
+TIM_HandleTypeDef htim4;
+
 UART_HandleTypeDef huart3;
 
 /* USER CODE BEGIN PV */
@@ -109,16 +110,19 @@ RTC_TimeTypeDef sTime;
 
 extern int 	i;
 
+bool updateRTC;
+
 uint8_t		estado = 0;
 uint8_t		teste = 0;
 uint8_t 	result;
 
-uint8_t UART_RX[1];
-uint8_t UART_TX[8] = "1350.0\n";
+uint8_t 	UART_H1[1];
+uint8_t 	UART_RX[1];
+uint8_t 	UART_TX[8] = "1350.0\n";
 
 
-char 				taux1[8];
-char 				taux[3];
+char 					taux1[8];
+char 					taux[3];
 unsigned long	sensor[20] = {0};
 
 // ----------------------------------- MEDICAO -------------------------------------
@@ -185,6 +189,7 @@ static void MX_GPIO_Init(void);
 static void MX_RTC_Init(void);
 static void MX_SPI2_Init(void);
 static void MX_USART3_UART_Init(void);
+static void MX_TIM4_Init(void);
 
 /* USER CODE BEGIN PFP */
 /* Private function prototypes -----------------------------------------------*/
@@ -194,7 +199,38 @@ static void MX_USART3_UART_Init(void);
 
 /* USER CODE BEGIN 0 */
 
-/* FRESULT open_append ----------------------------------------------------------*/
+
+
+void					FIR_vector(int M, double vector[],double vector_F[],int N){
+	
+	double				ss[100] = {0};
+	unsigned long sum = 0;
+	int						count =0;
+	int						it    =0;
+
+	for(i=0;i<N;i++){										
+		
+		ss[i] = vector[i];
+		
+	}
+	
+	for(it=0;it<N;it++){
+		
+			sum = 0;
+			
+			for(i=0;i<M;i++){
+				
+				sum = sum + ss[i]*FIR_C[i];	  // 16 valores 
+			}
+			
+			vector_F[count] = sum;
+			count++;
+			
+			for(i=0;i<(N-1);i++){										
+				ss[i] = ss[i+1];         
+			}	
+	}
+}
 
 	FRESULT open_append (
     FIL* fp,            /* [OUT] File object to create */
@@ -227,7 +263,16 @@ void 					Update_RTC(void){
 	mes = sDate.Month;
 	ano =	sDate.Year;
 }
-
+void 					Update_From_User_RTC(void){
+	
+	sTime.Minutes = minutos;	
+	sTime.Hours = horas;
+	sDate.Date = dia;
+	sDate.Month = mes;
+	sDate.Year = ano;
+	HAL_RTC_SetTime(&hrtc,&sTime,RTC_FORMAT_BIN);
+	HAL_RTC_SetDate(&hrtc,&sDate,RTC_FORMAT_BIN);
+}
 void 					LCD_ShowRTC(void){
 	
 	sprintf(taux1,"%02d/%02d/%02d",dia,mes,ano);
@@ -458,12 +503,11 @@ int main(void)
   MX_RTC_Init();
   MX_SPI2_Init();
   MX_USART3_UART_Init();
+  MX_TIM4_Init();
   /* USER CODE BEGIN 2 */
 	
-	
-	LCD_INICIALIZA();			
-	//	__HAL_UART_ENABLE_IT(&huart3,UART_IT_TC);	
-	
+	LCD_INICIALIZA();
+	HAL_TIM_Base_Start_IT(&htim4);
 	__HAL_UART_ENABLE_IT(&huart3,UART_IT_RXNE);	
 	ENVIA_STRING_LCD("MENU");
 
@@ -484,14 +528,11 @@ int main(void)
 					teste = 1;	
 					Tara = Get_Tara();
 				}		
-				
-//					LCD_LIMPA();
-//					ENVIA_STRING_LCD("Obtendo Tara...");
 					
 					LCD_LIMPA();
 					aForce = ReadCount();	
 					Force = fabs((aForce - Tara)*(0.00238));
-//				
+				
 					LCD_CURSOR(0,0);
 					sprintf(taux1,"%7.2f",Force);						
 					ENVIA_STRING_LCD(taux1);			
@@ -626,21 +667,21 @@ static void MX_RTC_Init(void)
 
     /**Initialize RTC and set the Time and Date 
     */
-  sTime.Hours = 0x12;
-  sTime.Minutes = 0x0;
-  sTime.Seconds = 0x0;
+  sTime.Hours = 12;
+  sTime.Minutes = 0;
+  sTime.Seconds = 0;
 
-  if (HAL_RTC_SetTime(&hrtc, &sTime, RTC_FORMAT_BCD) != HAL_OK)
+  if (HAL_RTC_SetTime(&hrtc, &sTime, RTC_FORMAT_BIN) != HAL_OK)
   {
     _Error_Handler(__FILE__, __LINE__);
   }
 
   DateToUpdate.WeekDay = RTC_WEEKDAY_MONDAY;
   DateToUpdate.Month = RTC_MONTH_JANUARY;
-  DateToUpdate.Date = 0x1;
-  DateToUpdate.Year = 0x18;
+  DateToUpdate.Date = 1;
+  DateToUpdate.Year = 18;
 
-  if (HAL_RTC_SetDate(&hrtc, &DateToUpdate, RTC_FORMAT_BCD) != HAL_OK)
+  if (HAL_RTC_SetDate(&hrtc, &DateToUpdate, RTC_FORMAT_BIN) != HAL_OK)
   {
     _Error_Handler(__FILE__, __LINE__);
   }
@@ -668,6 +709,39 @@ static void MX_SPI2_Init(void)
   hspi2.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
   hspi2.Init.CRCPolynomial = 10;
   if (HAL_SPI_Init(&hspi2) != HAL_OK)
+  {
+    _Error_Handler(__FILE__, __LINE__);
+  }
+
+}
+
+/* TIM4 init function */
+static void MX_TIM4_Init(void)
+{
+
+  TIM_ClockConfigTypeDef sClockSourceConfig;
+  TIM_MasterConfigTypeDef sMasterConfig;
+
+  htim4.Instance = TIM4;
+  htim4.Init.Prescaler = 65000;
+  htim4.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim4.Init.Period = 1600;
+  htim4.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim4.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim4) != HAL_OK)
+  {
+    _Error_Handler(__FILE__, __LINE__);
+  }
+
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim4, &sClockSourceConfig) != HAL_OK)
+  {
+    _Error_Handler(__FILE__, __LINE__);
+  }
+
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim4, &sMasterConfig) != HAL_OK)
   {
     _Error_Handler(__FILE__, __LINE__);
   }
@@ -751,24 +825,11 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE BEGIN 4 */
 
-//void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart){
-
-//	
-//	
-//}
-
-//void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart){
-//	
-//	
-//	__NOP();
-//		
-//}
-
 /* USER CODE END 4 */
 
 /**
   * @brief  Period elapsed callback in non blocking mode
-  * @note   This function is called  when TIM2 interrupt took place, inside
+  * @note   This function is called  when TIM3 interrupt took place, inside
   * HAL_TIM_IRQHandler(). It makes a direct call to HAL_IncTick() to increment
   * a global variable "uwTick" used as application time base.
   * @param  htim : TIM handle
@@ -779,7 +840,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
   /* USER CODE BEGIN Callback 0 */
 
   /* USER CODE END Callback 0 */
-  if (htim->Instance == TIM2) {
+  if (htim->Instance == TIM3) {
     HAL_IncTick();
   }
   /* USER CODE BEGIN Callback 1 */
