@@ -53,16 +53,16 @@
 
 /* USER CODE BEGIN Includes */
 
-#define CMD0 (0x40+0) // GO_IDLE_STATE
-#define CMD1 (0x40+1) // SEND_OP_COND (MMC)
-#define ACMD41 (0xC0+41) // SEND_OP_COND (SDC)
-#define CMD8 (0x40+8) // SEND_IF_COND
-#define CMD9 (0x40+9) // SEND_CSD
-#define CMD16 (0x40+16) // SET_BLOCKLEN
-#define CMD17 (0x40+17) // READ_SINGLE_BLOCK
-#define CMD24 (0x40+24) // WRITE_BLOCK
-#define CMD55 (0x40+55) // APP_CMD
-#define CMD58 (0x40+58) // READ_OCR
+#define CMD0 		(0x40+0) // GO_IDLE_STATE
+#define CMD1 		(0x40+1) // SEND_OP_COND (MMC)
+#define ACMD41 	(0xC0+41) // SEND_OP_COND (SDC)
+#define CMD8 		(0x40+8) // SEND_IF_COND
+#define CMD9 		(0x40+9) // SEND_CSD
+#define CMD16 	(0x40+16) // SET_BLOCKLEN
+#define CMD17 	(0x40+17) // READ_SINGLE_BLOCK
+#define CMD24 	(0x40+24) // WRITE_BLOCK
+#define CMD55 	(0x40+55) // APP_CMD
+#define CMD58 	(0x40+58) // READ_OCR
 
 #include <string.h>
 #include <stdlib.h>
@@ -112,25 +112,25 @@ extern int 	i;
 
 bool updateRTC;
 
-uint8_t		estado = 0;
-uint8_t		teste = 0;
+uint8_t		estado 	= 0;
+uint8_t		teste 	= 0;
 uint8_t 	result;
 
 uint8_t 	UART_H1[1];
 uint8_t 	UART_RX[1];
-uint8_t 	UART_TX[8] = "1350.0\n";
+uint8_t 	UART_TX[8] = "1350.00";
 
-
+char 					UART_MEA_SEND[8] = {0};
 char 					taux1[8];
 char 					taux[3];
 unsigned long	sensor[20] = {0};
 
 // ----------------------------------- MEDICAO -------------------------------------
 
-
-double Tara 			= 0;
-double aForce		= 0;
-double Force 		= 0;
+double Vector_MEA[100] 	= {0};
+double Tara 						= 0;
+double aForce						= 0;
+double Force 						= 0;
 
 // ----------------------------------- uSD -------------------------------------
 
@@ -152,16 +152,13 @@ signed int  ano 			= 18;
 
 // ----------------------------------- Kalman`s FILTER -------------------------------------
 
-float KG = 0 ;
-float MEA = 0;
-
-float ERROR_E0 = 20;
-float ERROR_E1 = 0;
-
-int		ERROR_MEA = 5;
-
-double E_E0 = 0;					//Estimativa Futura - Primeira previsao = Tara
-double E_E1 = 0;					//Estimativa Passada
+float 	KG 				= 0 ;
+float 	MEA 			= 0;
+float 	ERROR_E0 	= 20;
+float 	ERROR_E1 	= 0;
+int			ERROR_MEA = 5;
+double 	E_E0 			= 0;					//Estimativa Futura - Primeira previsao = Tara
+double 	E_E1 			= 0;					//Estimativa Passada
 
 // ----------------------------------- FIR FILTER -------------------------------------------
 
@@ -174,11 +171,11 @@ double			FIR_C[] = {0.0610597081690606,	0.0616322647111381	,0.0621255648055849	,
 
 
 // ----------------------------------- IIR FILTER: -------------------------------------------
-double 			sumA = 0;
-double 			sumB = 0;
-double 			IIR_B[3] ={0.000238	,0.000476,	0.000238};
-double 			IIR_A[3] ={1, -1.9650,	0.9661};	
-double 			y[10] ={0};
+double 			sumA 			= 0;
+double 			sumB 			= 0;
+double 			IIR_B[3] 	= {0.000238	,0.000476,	0.000238};
+double 			IIR_A[3] 	= {1, -1.9650,	0.9661};	
+double 			y[10] 		= {0};
 
 	
 /* USER CODE END PV */
@@ -463,6 +460,35 @@ double 				Get_Tara(void){
 	Tara = auxTara2/20;
 	return Tara;
 }
+void 					Wait_Start_Measuring(int Peso_Minimo){
+	
+	
+	for(i=0;i<10;i++)
+	aForce = ReadCount();	
+	
+	Force = fabs((aForce - Tara)*(0.00238));
+	
+	while(estado == 0x01 && Force < Peso_Minimo){	
+		
+		aForce = ReadCount();	
+		Force = fabs((aForce - Tara)*(0.00238));
+	}
+	
+}
+void 					Measuring(void){
+		
+	while(estado == 0x01 && Force > 100){	
+		
+		aForce = ReadCount();	
+		Force = fabs((aForce - Tara)*(0.00238));
+		
+					LCD_CURSOR(0,0);
+					sprintf(taux1,"%7.2f",Force);						
+					ENVIA_STRING_LCD(taux1);				
+					HAL_UART_Transmit(&huart3, UART_TX ,sizeof(UART_TX), 100);
+	}
+	
+}
 
 /* USER CODE END 0 */
 
@@ -509,6 +535,7 @@ int main(void)
 	LCD_INICIALIZA();
 	HAL_TIM_Base_Start_IT(&htim4);
 	__HAL_UART_ENABLE_IT(&huart3,UART_IT_RXNE);	
+	__HAL_UART_ENABLE_IT(&huart3,UART_IT_TXE);	
 	ENVIA_STRING_LCD("MENU");
 
   /* USER CODE END 2 */
@@ -528,17 +555,23 @@ int main(void)
 					teste = 1;	
 					Tara = Get_Tara();
 				}		
-					
+				
 					LCD_LIMPA();
-					aForce = ReadCount();	
-					Force = fabs((aForce - Tara)*(0.00238));
+					ENVIA_STRING_LCD("Aguardando");
+					Wait_Start_Measuring(100);
+					LCD_LIMPA();
+					ENVIA_STRING_LCD("Medindo");
 				
-					LCD_CURSOR(0,0);
-					sprintf(taux1,"%7.2f",Force);						
-					ENVIA_STRING_LCD(taux1);			
-				
-					HAL_UART_Transmit(&huart3, taux1 ,sizeof(taux1), 100);
-					HAL_Delay(500);
+					while(estado == 0x01 && Force > 100){	
+		
+						aForce = ReadCount();	
+						Force = fabs((aForce - Tara)*(0.00238));
+		
+						LCD_CURSOR(0,0);
+						sprintf(UART_MEA_SEND,"%7.2f",Force);						
+						ENVIA_STRING_LCD(UART_MEA_SEND);				
+						HAL_UART_Transmit_IT(&huart3, UART_MEA_SEND ,sizeof(UART_MEA_SEND));
+	}
 				
 			break; 
 			}
@@ -561,7 +594,7 @@ int main(void)
 					ENVIA_STRING_LCD("RTC");
 					teste = 1;
 				}
-							      
+				
 			break; 
 			}
 			
@@ -571,6 +604,11 @@ int main(void)
 					LCD_LIMPA();
 					ENVIA_STRING_LCD("MENU");
 					teste = 1;
+					
+					if(updateRTC){
+						Update_From_User_RTC();
+						updateRTC = false;
+					}
 				}
 							      
 			break; 
@@ -723,9 +761,9 @@ static void MX_TIM4_Init(void)
   TIM_MasterConfigTypeDef sMasterConfig;
 
   htim4.Instance = TIM4;
-  htim4.Init.Prescaler = 65000;
+  htim4.Init.Prescaler = 30000;
   htim4.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim4.Init.Period = 1600;
+  htim4.Init.Period = 2000;
   htim4.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim4.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim4) != HAL_OK)
