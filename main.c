@@ -116,7 +116,7 @@ uint8_t		estado 	= 0;
 uint8_t		teste 	= 0;
 uint8_t 	result;
 
-uint8_t 	UART_H1[1];
+uint8_t 	UART_H1[5];
 uint8_t 	UART_RX[1];
 uint8_t 	UART_TX[8] = "1350.00";
 
@@ -127,10 +127,13 @@ unsigned long	sensor[20] = {0};
 
 // ----------------------------------- MEDICAO -------------------------------------
 
-double Vector_MEA[100] 	= {0};
-double Tara 						= 0;
-double aForce						= 0;
-double Force 						= 0;
+double 	Vector_MEA[100] 			= {0};
+double 	Vector_Last_MEA[100] 	= {0};
+double 	Tara 									= 0;
+double 	aForce								= 0;
+double 	Force 								= 0;
+bool		Not_Busy 							= true;
+double	Maior_Valor						= 0;
 
 // ----------------------------------- uSD -------------------------------------
 
@@ -143,7 +146,6 @@ char 				USER_Path[4]; /* logical drive path */
 // ----------------------------------- RTC -------------------------------------
 
 signed int	horas 		= 12;
-signed int	hora 		  = 12;
 signed int	minutos 	= 30;
 signed int	segundos 	= 50;
 signed int	dia 			= 15;
@@ -262,6 +264,13 @@ void 					Update_RTC(void){
 }
 void 					Update_From_User_RTC(void){
 	
+	horas 	= UART_H1[0];
+	minutos = UART_H1[1];
+	dia 		= UART_H1[2];
+	mes 		= UART_H1[3];
+	ano 		= UART_H1[4];
+	
+	
 	sTime.Minutes = minutos;	
 	sTime.Hours = horas;
 	sDate.Date = dia;
@@ -276,7 +285,7 @@ void 					LCD_ShowRTC(void){
 	LCD_CURSOR(1,8);	
   ENVIA_STRING_LCD(taux1);
 	LCD_CURSOR(0,11);	
-	sprintf(taux,"%02d:%02d",hora,minutos);
+	sprintf(taux,"%02d:%02d",horas,minutos);
 	ENVIA_STRING_LCD(taux);
 	LCD_CURSOR(1,20);
 
@@ -479,16 +488,48 @@ void 					Measuring(void){
 		
 	while(estado == 0x01 && Force > 100){	
 		
-		aForce = ReadCount();	
-		Force = fabs((aForce - Tara)*(0.00238));
+						aForce = ReadCount();	
+						Force = fabs((aForce - Tara)*(0.00238));
 		
-					LCD_CURSOR(0,0);
-					sprintf(taux1,"%7.2f",Force);						
-					ENVIA_STRING_LCD(taux1);				
-					HAL_UART_Transmit(&huart3, UART_TX ,sizeof(UART_TX), 100);
+						LCD_CURSOR(0,0);
+						sprintf(UART_MEA_SEND,"%7.2f",Force);						
+						ENVIA_STRING_LCD(UART_MEA_SEND);				
+						HAL_UART_Transmit_IT(&huart3, UART_MEA_SEND ,sizeof(UART_MEA_SEND));
 	}
 	
 }
+void 					Measuring_Vector(double Aux_Vector[]){
+	
+	int m =0;
+	
+	while(estado == 0x01 && Force > 100){	
+		
+		aForce = ReadCount();	
+		Force = fabs((aForce - Tara)*(0.00238));
+		Aux_Vector[m] = Force;
+		m++;		
+		
+	}
+	
+}
+double 				Maior_Valor_Vector(double Aux_Vector[]){
+	
+	int m =1;
+	double Maior_Valor_Function =0;
+	
+	for(i=1;i<100;i++){
+			
+			if(Aux_Vector[m] > Aux_Vector[m-1]){
+			
+				Maior_Valor_Function = Aux_Vector[m];
+			}	
+		
+		m++;		
+		}
+	
+		return Maior_Valor_Function;
+	}
+	
 
 /* USER CODE END 0 */
 
@@ -552,27 +593,30 @@ int main(void)
 				if(teste != 1){
 					LCD_LIMPA();
 					ENVIA_STRING_LCD("INICIAR");
-					teste = 1;	
-					Tara = Get_Tara();
+					teste = 1;						
 				}		
-				
 					LCD_LIMPA();
-					ENVIA_STRING_LCD("Aguardando");
+					ENVIA_STRING_LCD("Tara");
+					Tara = Get_Tara();
+					LCD_LIMPA();
+					for(i=0;i<100;i++){
+						Vector_MEA[i] = 0;
+					}
+					ENVIA_STRING_LCD("Aguardando Ini.");
 					Wait_Start_Measuring(100);
 					LCD_LIMPA();
-					ENVIA_STRING_LCD("Medindo");
-				
-					while(estado == 0x01 && Force > 100){	
-		
-						aForce = ReadCount();	
-						Force = fabs((aForce - Tara)*(0.00238));
-		
-						LCD_CURSOR(0,0);
-						sprintf(UART_MEA_SEND,"%7.2f",Force);						
-						ENVIA_STRING_LCD(UART_MEA_SEND);				
-						HAL_UART_Transmit_IT(&huart3, UART_MEA_SEND ,sizeof(UART_MEA_SEND));
-	}
-				
+					//Measuring();
+					Measuring_Vector(Vector_MEA);
+					Maior_Valor = Maior_Valor_Vector(Vector_MEA);
+					for(i=0;i<100;i++)
+						Vector_Last_MEA[i] = Vector_MEA[i];
+					
+					sprintf(UART_MEA_SEND,"%7.2f",Maior_Valor);						
+					ENVIA_STRING_LCD(UART_MEA_SEND);				
+					HAL_UART_Transmit_IT(&huart3, UART_MEA_SEND ,sizeof(UART_MEA_SEND));
+					
+					
+					
 			break; 
 			}
 			

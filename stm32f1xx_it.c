@@ -37,14 +37,26 @@
 
 /* USER CODE BEGIN 0 */
 
+// ----------------------------------- RTC -------------------------------------
+
+extern signed int	horas;
+extern signed int	minutos; 	
+extern signed int	segundos; 	
+extern signed int	dia; 			
+extern signed int	mes;
+extern signed int ano;
+char 							UART_RTC[15];
+
 #include "stdbool.h"
 #include "LCD162A.h"
+#include "main.h"
 
 extern uint8_t		estado ;
 extern uint8_t		teste ;
 extern uint8_t 		UART_RX[1];
-
-extern bool updateRTC;
+extern uint8_t		estado;
+extern bool 			updateRTC;
+extern bool				Not_Busy;
 
 int Recebendo = 0;
 int n=0;
@@ -249,10 +261,11 @@ void TIM4_IRQHandler(void)
   /* USER CODE END TIM4_IRQn 0 */
   HAL_TIM_IRQHandler(&htim4);
   /* USER CODE BEGIN TIM4_IRQn 1 */
-	
-//		LCD_LIMPA();
-//		ENVIA_STRING_LCD("TIMER IT");
-	
+		if(Not_Busy){
+
+			sprintf(UART_RTC,"%.02d:%.02d %.02d/%.02d/%.02d",horas,minutos,dia,mes,ano);			
+			HAL_UART_Transmit_IT(&huart3, UART_RTC ,sizeof(UART_RTC));
+		}
   /* USER CODE END TIM4_IRQn 1 */
 }
 
@@ -297,8 +310,9 @@ void USART3_IRQHandler(void)
 		
 		if(UART_RX[0] == 'F'){			
 			n =0;
-			Recebendo = 0;	
-			updateRTC	= true;		
+			Recebendo = 0;
+			updateRTC	= true;	
+			estado = 0x09;
 		}
 		
 		if(Recebendo == 1){
@@ -313,25 +327,23 @@ void USART3_IRQHandler(void)
 		else if(UART_RX[0] == '1'){
 			estado = 0x01;
 			teste = 0;
-			//HAL_TIM_Base_Stop_IT(&htim3);			
+			Not_Busy = false;
 		}
 		
 		else if(UART_RX[0] == '3'){
 			estado = 0x03;
 			teste = 0;
-			//HAL_TIM_Base_Stop_IT(&htim3);
 		}
 		
 		else if(UART_RX[0] == '5'){
 			estado = 0x05;
 			teste = 0;	
-			//HAL_TIM_Base_Stop_IT(&htim3);
 		}
 		
 		else if(UART_RX[0] == '9'){
+			teste = 0;	
 			estado = 0x09;
-			teste = 0;
-			//HAL_TIM_Base_Start_IT(&htim3);
+			Not_Busy = true;			
 		}
 		
 
