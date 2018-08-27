@@ -53,11 +53,11 @@
 
 /* USER CODE BEGIN Includes */
 
-#define CMD0 		(0x40+0) // GO_IDLE_STATE
-#define CMD1 		(0x40+1) // SEND_OP_COND (MMC)
+#define CMD0 		(0x40+0) 	// GO_IDLE_STATE
+#define CMD1 		(0x40+1) 	// SEND_OP_COND (MMC)
 #define ACMD41 	(0xC0+41) // SEND_OP_COND (SDC)
-#define CMD8 		(0x40+8) // SEND_IF_COND
-#define CMD9 		(0x40+9) // SEND_CSD
+#define CMD8 		(0x40+8) 	// SEND_IF_COND
+#define CMD9 		(0x40+9) 	// SEND_CSD
 #define CMD16 	(0x40+16) // SET_BLOCKLEN
 #define CMD17 	(0x40+17) // READ_SINGLE_BLOCK
 #define CMD24 	(0x40+24) // WRITE_BLOCK
@@ -75,21 +75,31 @@
 #include "math.h"
 #include "stdbool.h"
 
-#define CS_SD_GPIO_PORT 	GPIOA
-#define CS_SD_PIN 				GPIO_PIN_3
-#define CS_SD_LOW() 			HAL_GPIO_WritePin(CS_SD_GPIO_PORT, CS_SD_PIN, GPIO_PIN_RESET)
-#define CS_SD_HIGH() 			HAL_GPIO_WritePin(CS_SD_GPIO_PORT, CS_SD_PIN, GPIO_PIN_SET)
 
-#define HX_SCK_GPIO_PORT 	GPIOC
-#define HX_SCK_PIN 				GPIO_PIN_14
-#define HX_SCK_LOW() 			HAL_GPIO_WritePin(HX_SCK_GPIO_PORT, HX_SCK_PIN, GPIO_PIN_RESET)
-#define HX_SCK_HIGH()			HAL_GPIO_WritePin(HX_SCK_GPIO_PORT, HX_SCK_PIN, GPIO_PIN_SET)
+#define CS_SD_LOW() 			HAL_GPIO_WritePin(CS_SD_GPIO_Port, CS_SD_Pin, GPIO_PIN_RESET)
+#define CS_SD_HIGH() 			HAL_GPIO_WritePin(CS_SD_GPIO_Port, CS_SD_Pin, GPIO_PIN_SET)
 
-#define HX_DT_GPIO_PORT 	GPIOC
-#define HX_DT_PIN 				GPIO_PIN_15
-#define HX_DT_LOW() 			HAL_GPIO_WritePin(HX_DT_GPIO_PORT, HX_DT_PIN, GPIO_PIN_RESET)
-#define HX_DT_HIGH() 			HAL_GPIO_WritePin(HX_DT_GPIO_PORT, HX_DT_PIN, GPIO_PIN_SET)
-#define HX_DT_Read() 			HAL_GPIO_ReadPin(HX_DT_GPIO_PORT, HX_DT_PIN) 
+
+#define HX_SCK_LOW() 			HAL_GPIO_WritePin(HX_SCK_GPIO_Port, HX_SCK_Pin, GPIO_PIN_RESET)
+#define HX_SCK_HIGH()			HAL_GPIO_WritePin(HX_SCK_GPIO_Port, HX_SCK_Pin, GPIO_PIN_SET)
+
+
+#define HX_DT_LOW() 			HAL_GPIO_WritePin(HX_DT_GPIO_Port, HX_DT_Pin, GPIO_PIN_RESET)
+#define HX_DT_HIGH() 			HAL_GPIO_WritePin(HX_DT_GPIO_Port, HX_DT_Pin, GPIO_PIN_SET)
+#define HX_DT_Read() 			HAL_GPIO_ReadPin(HX_DT_GPIO_Port, HX_DT_Pin)
+
+#define RELE1_LOW() 			HAL_GPIO_WritePin(Rele_Motor_1_GPIO_Port, Rele_Motor_1_Pin, GPIO_PIN_RESET)
+#define RELE1_HIGH() 			HAL_GPIO_WritePin(Rele_Motor_1_GPIO_Port, Rele_Motor_1_Pin, GPIO_PIN_SET)
+
+#define RELE2_LOW() 			HAL_GPIO_WritePin(Rele_Motor_2_GPIO_Port, Rele_Motor_2_Pin, GPIO_PIN_RESET)
+#define RELE2_HIGH() 			HAL_GPIO_WritePin(Rele_Motor_2_GPIO_Port, Rele_Motor_2_Pin, GPIO_PIN_SET)
+
+#define FC_UP_Read() 			HAL_GPIO_ReadPin(FC_UP_GPIO_Port, FC_UP_Pin)
+
+#define MEA_READY_HIGH() 	HAL_GPIO_WritePin(MEA_READY_GPIO_Port, MEA_READY_Pin, GPIO_PIN_SET)
+#define MEA_READY_LOW() 	HAL_GPIO_WritePin(MEA_READY_GPIO_Port, MEA_READY_Pin, GPIO_PIN_RESET)
+
+
 
 /* USER CODE END Includes */
 
@@ -97,8 +107,6 @@
 RTC_HandleTypeDef hrtc;
 
 SPI_HandleTypeDef hspi2;
-
-TIM_HandleTypeDef htim4;
 
 UART_HandleTypeDef huart3;
 
@@ -109,21 +117,25 @@ RTC_DateTypeDef sDate;
 RTC_TimeTypeDef sTime;
 
 extern int 	i;
+bool 				DoneGRF = false;
 
-bool updateRTC;
-
-uint8_t		estado 	= 0;
-uint8_t		teste 	= 0;
-uint8_t 	result;
-
-uint8_t 	UART_H1[5];
-uint8_t 	UART_RX[1];
-uint8_t 	UART_TX[8] = "1350.00";
-
-char 					UART_MEA_SEND[8] = {0};
+uint8_t				estado = 0;
+uint8_t				teste = 0;
+uint8_t 			result;
 char 					taux1[8];
 char 					taux[3];
 unsigned long	sensor[20] = {0};
+
+
+// ---------------------------------- UART_RX_TX -----------------------------------
+
+bool 			UART_RX_FLAG = false;
+int				n = 0;
+int 			Recebendo = 0;
+uint8_t 	UART_H1[5];
+uint8_t 	UART_RX[1];
+uint8_t		UART_LAST_RX[1];
+char 			UART_MEA_SEND[8] = {0};
 
 // ----------------------------------- MEDICAO -------------------------------------
 
@@ -132,8 +144,12 @@ double 	Vector_Last_MEA[100] 	= {0};
 double 	Tara 									= 0;
 double 	aForce								= 0;
 double 	Force 								= 0;
-bool		Not_Busy 							= true;
 double	Maior_Valor						= 0;
+double	UART_AUX_Sending			= 0;
+bool		MEA_Abort 						= false;
+bool		Sending_Vector				= true;
+bool		Start_MEA							= true;
+
 
 // ----------------------------------- uSD -------------------------------------
 
@@ -146,23 +162,28 @@ char 				USER_Path[4]; /* logical drive path */
 // ----------------------------------- RTC -------------------------------------
 
 signed int	horas 		= 12;
+signed int	hora 		  = 12;
 signed int	minutos 	= 30;
 signed int	segundos 	= 50;
 signed int	dia 			= 15;
 signed int	mes 			= 06;
 signed int  ano 			= 18;
+uint8_t 		UART_H1[5];
+bool 				updateRTC;
+// ------------------------------- Kalman`s FILTER ------------------------------
 
-// ----------------------------------- Kalman`s FILTER -------------------------------------
+float KG = 0 ;
+float MEA = 0;
 
-float 	KG 				= 0 ;
-float 	MEA 			= 0;
-float 	ERROR_E0 	= 20;
-float 	ERROR_E1 	= 0;
-int			ERROR_MEA = 5;
-double 	E_E0 			= 0;					//Estimativa Futura - Primeira previsao = Tara
-double 	E_E1 			= 0;					//Estimativa Passada
+float ERROR_E0 = 20;
+float ERROR_E1 = 0;
 
-// ----------------------------------- FIR FILTER -------------------------------------------
+int		ERROR_MEA = 5;
+
+double E_E0 = 0;					//Estimativa Futura - Primeira previsao = Tara
+double E_E1 = 0;					//Estimativa Passada
+
+// ---------------------------------- FIR FILTER --------------------------------
 
 // Hamming Window (11)
 //double			FIR_C[] = {0.0145489741947061	,0.0305712499252980	,0.0725451577608892	,0.124486576686153	,0.166541934360414	,0.182612214145080,	0.166541934360414,	0.124486576686153,	0.0725451577608892,	0.0305712499252980	,0.0145489741947061	};
@@ -172,12 +193,12 @@ double			FIR_C[] = {0.0610597081690606,	0.0616322647111381	,0.0621255648055849	,
 
 
 
-// ----------------------------------- IIR FILTER: -------------------------------------------
-double 			sumA 			= 0;
-double 			sumB 			= 0;
-double 			IIR_B[3] 	= {0.000238	,0.000476,	0.000238};
-double 			IIR_A[3] 	= {1, -1.9650,	0.9661};	
-double 			y[10] 		= {0};
+// ----------------------------------- IIR FILTER: ------------------------------
+double 			sumA = 0;
+double 			sumB = 0;
+double 			IIR_B[3] ={0.000238	,0.000476,	0.000238};
+double 			IIR_A[3] ={1, -1.9650,	0.9661};	
+double 			y[10] ={0};
 
 	
 /* USER CODE END PV */
@@ -188,7 +209,6 @@ static void MX_GPIO_Init(void);
 static void MX_RTC_Init(void);
 static void MX_SPI2_Init(void);
 static void MX_USART3_UART_Init(void);
-static void MX_TIM4_Init(void);
 
 /* USER CODE BEGIN PFP */
 /* Private function prototypes -----------------------------------------------*/
@@ -198,7 +218,7 @@ static void MX_TIM4_Init(void);
 
 /* USER CODE BEGIN 0 */
 
-
+/* FRESULT open_append ----------------------------------------------------------*/
 
 void					FIR_vector(int M, double vector[],double vector_F[],int N){
 	
@@ -477,7 +497,9 @@ void 					Wait_Start_Measuring(int Peso_Minimo){
 	
 	Force = fabs((aForce - Tara)*(0.00238));
 	
-	while(estado == 0x01 && Force < Peso_Minimo){	
+	MEA_Abort = false;
+	
+	while( !MEA_Abort && Force < Peso_Minimo){	
 		
 		aForce = ReadCount();	
 		Force = fabs((aForce - Tara)*(0.00238));
@@ -513,6 +535,7 @@ void 					Measuring_Vector(double Aux_Vector[]){
 	
 }
 double 				Maior_Valor_Vector(double Aux_Vector[]){
+
 	
 	int m =1;
 	double Maior_Valor_Function =0;
@@ -531,6 +554,79 @@ double 				Maior_Valor_Vector(double Aux_Vector[]){
 	}
 	
 
+void					UART_Received(void){
+
+	HAL_UART_Receive(&huart3,UART_RX,sizeof(UART_RX),250);
+			
+		if(UART_RX[0] == 'H'){			
+			Recebendo = 1;			
+					
+		}
+		
+		else if(UART_RX[0] == 'H'){			
+			Recebendo = 1;			
+					
+		}
+		
+		else if(UART_RX[0] == 'H'){			
+			Recebendo = 1;			
+					
+		}
+		
+		else if(UART_RX[0] == 'H'){			
+			Recebendo = 1;			
+						
+		}
+		
+		else if(UART_RX[0] == 'H'){			
+			Recebendo = 1;			
+						
+		}
+		
+		if(UART_RX[0] == 'F'){			
+			n =0;
+			Recebendo = 0;	
+			updateRTC	= true;		
+		}
+		
+		if(Recebendo == 1){
+			
+			if(UART_RX[0] != 'H'){
+				UART_H1[n] = UART_RX[0];
+				n++;
+				Recebendo = 0;
+			}
+		}	
+	
+		else if(UART_RX[0] == '1'){
+			estado = 0x01;
+			Start_MEA = true;			
+		}
+		
+		else if(UART_RX[0] == '4'){
+			UART_RX[0] = '1';
+			Start_MEA = true;
+			
+		}
+		
+		else if(UART_RX[0] == '3'){
+			estado = 0x03;
+			teste = 0;
+		}
+		
+		else if(UART_RX[0] == '5'){
+			estado = 0x05;
+			teste = 0;	
+		}
+		
+		else if(UART_RX[0] == '9'){
+			estado = 0x09;
+			teste = 0;
+		}
+				
+}
+
+	
 /* USER CODE END 0 */
 
 /**
@@ -570,63 +666,120 @@ int main(void)
   MX_RTC_Init();
   MX_SPI2_Init();
   MX_USART3_UART_Init();
-  MX_TIM4_Init();
   /* USER CODE BEGIN 2 */
+	MEA_READY_LOW();
+	LCD_INICIALIZA();			
 	
-	LCD_INICIALIZA();
-	HAL_TIM_Base_Start_IT(&htim4);
-	__HAL_UART_ENABLE_IT(&huart3,UART_IT_RXNE);	
-	__HAL_UART_ENABLE_IT(&huart3,UART_IT_TXE);	
 	ENVIA_STRING_LCD("MENU");
-
+	
+	if(FC_UP_Read()){	
+		RELE2_HIGH();
+	}
+	
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1){
 		
+//		while(!FimCurso_UP_Read()){
+//			RELE2_HIGH() ;
+//			ENVIA_STRING_LCD("1on1");
+
+//		}
+//		while(!FimCurso_DOWN_Read()){
+//			RELE1_HIGH() ;
+//			ENVIA_STRING_LCD("2on2");
+
+//		}
+//		
+//		RELE2_LOW();
+//		RELE1_LOW();
+//		ENVIA_STRING_LCD("OFF");
 		
-		 switch(estado){
+		
+		
+		if(UART_RX_FLAG){
+			UART_Received();
+			UART_RX_FLAG = false;
+		}
+
+		switch(estado){
 			
 			case 0x01:
 			{				
-				if(teste != 1){
+				if(Start_MEA){
+					MEA_READY_LOW();
+					Start_MEA = false;
 					LCD_LIMPA();
 					ENVIA_STRING_LCD("INICIAR");
-					teste = 1;						
-				}		
+										
 					LCD_LIMPA();
 					ENVIA_STRING_LCD("Tara");
 					Tara = Get_Tara();
 					LCD_LIMPA();
+					
 					for(i=0;i<100;i++){
 						Vector_MEA[i] = 0;
 					}
+					
 					ENVIA_STRING_LCD("Aguardando Ini.");
-					Wait_Start_Measuring(100);
+					MEA_READY_HIGH();																		//	Avisa arduino que pode inicar FORCA											
+					RELE1_HIGH();																				//	Ativa o motor	
+					Wait_Start_Measuring(100);													//	Esperar ate 100gramas		
 					LCD_LIMPA();
-					//Measuring();
 					Measuring_Vector(Vector_MEA);
-					Maior_Valor = Maior_Valor_Vector(Vector_MEA);
-					for(i=0;i<100;i++)
-						Vector_Last_MEA[i] = Vector_MEA[i];
+					Maior_Valor = Maior_Valor_Vector(Vector_MEA);					
+					MEA_READY_LOW();																		//	Avisa arduino que medicao parou		
 					
-					sprintf(UART_MEA_SEND,"%7.2f",Maior_Valor);						
-					ENVIA_STRING_LCD(UART_MEA_SEND);				
-					HAL_UART_Transmit_IT(&huart3, UART_MEA_SEND ,sizeof(UART_MEA_SEND));
-					
-					
+					if(estado == 0x01){
+						for(i=0;i<100;i++){						
+							Vector_Last_MEA[i] = Vector_MEA[i];
+						}
+					}
+					RELE1_LOW();																				//	Desliga motor
+					sprintf(UART_MEA_SEND,"%7.2f",Maior_Valor);									
+					HAL_UART_Transmit(&huart3, UART_MEA_SEND ,sizeof(UART_MEA_SEND),250);
+					RELE2_HIGH();
+																								
+
+				}			
+				
 					
 			break; 
 			}
 			
 			case 0x03:
 			{					
-				if(teste != 1){
+				if(!DoneGRF){
+					
+					HAL_Delay(100);
 					LCD_LIMPA();
 					ENVIA_STRING_LCD("GRAFICO");
-					teste = 1;
+					teste = 1;			
+				
+				int mm = 0;	
+				
+				while(Sending_Vector){
+					
+					UART_AUX_Sending = Vector_Last_MEA[mm];
+					mm++;
+					sprintf(UART_MEA_SEND,"%7.0f",UART_AUX_Sending);						
+					HAL_UART_Transmit(&huart3, UART_MEA_SEND ,sizeof(UART_MEA_SEND),250);
+					HAL_Delay(100);
+					
+					if(UART_AUX_Sending == 0){
+						
+						estado 					= 0x09;
+						DoneGRF 				= true;
+						Sending_Vector 	= false;
+						teste							= 0;
+						HAL_Delay(100);
+						
+					}
 				}
+				
+			}
 							      
 			break; 
 			}
@@ -648,6 +801,8 @@ int main(void)
 					LCD_LIMPA();
 					ENVIA_STRING_LCD("MENU");
 					teste = 1;
+					DoneGRF 				= false;
+					Sending_Vector 	= true;
 					
 					if(updateRTC){
 						Update_From_User_RTC();
@@ -665,7 +820,8 @@ int main(void)
 	//	HAL_UART_Transmit(&huart3, UART_TX, sizeof(UART_TX),100);
 	//	HAL_Delay(500);
 
-  }
+  }	
+	
   /* USER CODE END 3 */
 
 }
@@ -797,45 +953,12 @@ static void MX_SPI2_Init(void)
 
 }
 
-/* TIM4 init function */
-static void MX_TIM4_Init(void)
-{
-
-  TIM_ClockConfigTypeDef sClockSourceConfig;
-  TIM_MasterConfigTypeDef sMasterConfig;
-
-  htim4.Instance = TIM4;
-  htim4.Init.Prescaler = 30000;
-  htim4.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim4.Init.Period = 2000;
-  htim4.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
-  htim4.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
-  if (HAL_TIM_Base_Init(&htim4) != HAL_OK)
-  {
-    _Error_Handler(__FILE__, __LINE__);
-  }
-
-  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
-  if (HAL_TIM_ConfigClockSource(&htim4, &sClockSourceConfig) != HAL_OK)
-  {
-    _Error_Handler(__FILE__, __LINE__);
-  }
-
-  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
-  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
-  if (HAL_TIMEx_MasterConfigSynchronization(&htim4, &sMasterConfig) != HAL_OK)
-  {
-    _Error_Handler(__FILE__, __LINE__);
-  }
-
-}
-
 /* USART3 init function */
 static void MX_USART3_UART_Init(void)
 {
 
   huart3.Instance = USART3;
-  huart3.Init.BaudRate = 9600;
+  huart3.Init.BaudRate = 57600;
   huart3.Init.WordLength = UART_WORDLENGTH_8B;
   huart3.Init.StopBits = UART_STOPBITS_1;
   huart3.Init.Parity = UART_PARITY_NONE;
@@ -868,67 +991,85 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13|HX_SCK_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOA, GPIO_PIN_3|DB4_Pin|DB5_Pin|DB6_Pin 
-                          |DB7_Pin|E_Pin|RS_Pin, GPIO_PIN_RESET);
+                          |DB7_Pin|Rele_Motor_2_Pin|Rele_Motor_1_Pin|MEA_READY_Pin 
+                          |E_Pin|RS_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, BT3_Pin|BT2_Pin|BT1_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOB, HX_SCK_Pin|BT3_Pin|BT2_Pin|BT1_Pin, GPIO_PIN_RESET);
 
-  /*Configure GPIO pins : PC13 HX_SCK_Pin */
-  GPIO_InitStruct.Pin = GPIO_PIN_13|HX_SCK_Pin;
+  /*Configure GPIO pin : PC13 */
+  GPIO_InitStruct.Pin = GPIO_PIN_13;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : HX_DT_Pin */
-  GPIO_InitStruct.Pin = HX_DT_Pin;
+  /*Configure GPIO pin : FC_IT_0_Pin */
+  GPIO_InitStruct.Pin = FC_IT_0_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  HAL_GPIO_Init(FC_IT_0_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : FC_UP_Pin */
+  GPIO_InitStruct.Pin = FC_UP_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_PULLUP;
-  HAL_GPIO_Init(HX_DT_GPIO_Port, &GPIO_InitStruct);
+  HAL_GPIO_Init(FC_UP_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pins : PA3 DB4_Pin DB5_Pin DB6_Pin 
-                           DB7_Pin E_Pin RS_Pin */
+                           DB7_Pin Rele_Motor_2_Pin Rele_Motor_1_Pin MEA_READY_Pin 
+                           E_Pin RS_Pin */
   GPIO_InitStruct.Pin = GPIO_PIN_3|DB4_Pin|DB5_Pin|DB6_Pin 
-                          |DB7_Pin|E_Pin|RS_Pin;
+                          |DB7_Pin|Rele_Motor_2_Pin|Rele_Motor_1_Pin|MEA_READY_Pin 
+                          |E_Pin|RS_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : BT3_Pin BT2_Pin BT1_Pin */
-  GPIO_InitStruct.Pin = BT3_Pin|BT2_Pin|BT1_Pin;
+  /*Configure GPIO pin : UART_CTS_Pin */
+  GPIO_InitStruct.Pin = UART_CTS_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(UART_CTS_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : HX_DT_Pin */
+  GPIO_InitStruct.Pin = HX_DT_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(HX_DT_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : HX_SCK_Pin BT3_Pin BT2_Pin BT1_Pin */
+  GPIO_InitStruct.Pin = HX_SCK_Pin|BT3_Pin|BT2_Pin|BT1_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+  /* EXTI interrupt init*/
+  HAL_NVIC_SetPriority(EXTI0_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI0_IRQn);
+
+  HAL_NVIC_SetPriority(EXTI1_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI1_IRQn);
 
 }
 
 /* USER CODE BEGIN 4 */
 
-/* USER CODE END 4 */
+void HAL_GPIO_EXTI_Callback (uint16_t GPIO_Pin){
 
-/**
-  * @brief  Period elapsed callback in non blocking mode
-  * @note   This function is called  when TIM3 interrupt took place, inside
-  * HAL_TIM_IRQHandler(). It makes a direct call to HAL_IncTick() to increment
-  * a global variable "uwTick" used as application time base.
-  * @param  htim : TIM handle
-  * @retval None
-  */
-void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
-{
-  /* USER CODE BEGIN Callback 0 */
+	 if (GPIO_Pin == FC_IT_0_Pin){
+		
+		RELE1_LOW();
+		RELE2_LOW();
+	
+	}
 
-  /* USER CODE END Callback 0 */
-  if (htim->Instance == TIM3) {
-    HAL_IncTick();
-  }
-  /* USER CODE BEGIN Callback 1 */
-
-  /* USER CODE END Callback 1 */
 }
+
+/* USER CODE END 4 */
 
 /**
   * @brief  This function is executed in case of error occurrence.
