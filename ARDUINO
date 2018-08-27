@@ -1,0 +1,663 @@
+#include <Adafruit_GFX.h> // Hardware-specific library
+#include <MCUFRIEND_kbv.h>
+#include <TouchScreen.h>
+MCUFRIEND_kbv tft;
+
+#define BLACK   0x0000
+#define BLUE    0x001F
+#define RED     0xF800
+#define GREEN   0x07E0
+#define CYAN    0x07FF
+#define MAGENTA 0xF81F
+#define YELLOW  0xFFE0
+#define WHITE   0xFFFF
+
+// VARIAVEIS -------------------------------------------------------
+
+#define MENU              0
+#define INICIAR           1
+#define GRAFICO           2
+#define RTC               3
+#define UART_RTS          13
+#define MEA_READY         12
+#define MEA_READY_Read()  digitalRead(MEA_READY)
+#define UART_RTS_HIGH()   digitalWrite(UART_RTS, HIGH)
+#define UART_RTS_LOW()    digitalWrite(UART_RTS, LOW)
+
+
+//int     UART_RTS = 13;
+
+int     n=0;
+int     state = 2;
+int     aux   = 1;
+
+int     hora = 0;
+int     minutos = 00;
+
+int     dia = 0;
+int     mes = 0;
+int     ano = 0;
+
+int     stateRTC =1;
+
+char    stringHORA;
+boolean grafico = false;
+boolean stringComplete = false;  // whether the string is complete
+char    inpString     [8] ;
+String  inString = ""; 
+char    inpStringTime [15] ;
+boolean busy = false; 
+boolean Done_GRF = false; 
+int     Medida_Grafico = 0;
+
+// TOUCHSCREEN -----------------------------------------------------
+
+#define YP A3   //A3 for ILI9320
+#define YM 7    //9
+#define XM A2
+#define XP 6    //8  
+
+TouchScreen myTouch(XP, YP, XM, YM, 300);
+TSPoint tp;    
+
+// FUNCtiONS  -----------------------------------------------------                 
+
+void readResistiveTouch(void)
+{
+    tp = myTouch.getPoint();
+    pinMode(YP, OUTPUT);      //restore shared pins
+    pinMode(XM, OUTPUT);
+    digitalWrite(YP, HIGH);
+    digitalWrite(XM, HIGH);
+}
+bool ISPRESSED(void)
+{
+    readResistiveTouch();
+    return tp.z > 20 && tp.z < 1000;
+}
+
+void showpoint(void)
+{
+    Serial.print("\r\nx="); Serial.print(tp.x);
+    Serial.print(" y="); Serial.print(tp.y);
+    Serial.print(" z="); Serial.print(tp.z);
+}
+
+void showMENU(void)
+{
+    
+      tft.fillRect(0,40,320,200,WHITE);
+      
+      // BT_INICIAR
+      tft.drawRect(77,60,165,45,BLACK);
+      tft.setTextColor(BLACK);
+      tft.setTextSize(3);
+      tft.setCursor(95,72);
+      tft.print("INICIAR");
+
+      // BT_GRAFICO      
+      tft.drawRect(77,120,165,45,BLACK);
+      tft.setTextColor(BLACK);
+      tft.setTextSize(3);
+      tft.setCursor(95,132);
+      tft.print("GRAFICO");
+      
+      // BT_RTC
+      tft.drawRect(64,180,192,45,BLACK);
+      tft.setTextColor(BLACK);
+      tft.setTextSize(3);
+      tft.setCursor(79,192);
+      tft.print("DATA/HORA");
+}
+
+void showINICIAR(void){
+
+      tft.fillRect(0,40,320,200,WHITE);
+      tft.setTextColor(BLACK);
+      tft.setTextSize(3);
+      tft.setCursor(25,132);
+      tft.print("Obtendo Tara...");      
+}
+
+void showGRAFICO(void){
+
+      tft.fillRect(0,40,320,200,WHITE);
+      tft.setTextColor(BLACK);
+      tft.setTextSize(3);
+      tft.setCursor(25,50);
+      tft.print("Grafico...");
+}
+
+void showRTC(void){
+
+      tft.fillRect(0,40,320,200,WHITE);
+      
+      tft.drawRect(70,50+80,180,30,BLACK);
+      tft.drawRect(70,85+80,180,30,BLACK);
+      tft.drawRect(70,120+80,180,30,BLACK);
+      
+      tft.setTextColor(BLACK);
+      tft.setTextSize(3);
+      tft.setCursor(150,135);
+      tft.print("+");
+      tft.setCursor(150,170);
+      tft.print("-");
+      tft.setCursor(148,208);
+      tft.setTextSize(2);
+      tft.print("OK");
+        
+}
+void sendRTC(void){
+  
+  //START
+  UART_RTS_HIGH();
+  Serial.print('H');  
+  delay(50);
+  UART_RTS_LOW();
+  UART_RTS_HIGH();
+  Serial.write(hora);
+  delay(50);
+  UART_RTS_LOW();
+  UART_RTS_HIGH();
+  Serial.print('H');
+  delay(50);
+  UART_RTS_LOW();
+  UART_RTS_HIGH();
+  Serial.write(minutos);
+  delay(50);
+  UART_RTS_LOW();
+  UART_RTS_HIGH();
+  Serial.print('H'); 
+  delay(50);
+  UART_RTS_LOW();
+  UART_RTS_HIGH();
+  Serial.write(dia);
+  delay(50);
+  UART_RTS_LOW();
+  UART_RTS_HIGH();
+  Serial.print('H');
+  delay(50); 
+  UART_RTS_LOW();
+  UART_RTS_HIGH();
+  Serial.write(mes);
+  delay(50);
+  UART_RTS_LOW();
+  UART_RTS_HIGH();
+  Serial.print('H');
+  delay(50); 
+  UART_RTS_LOW();
+  UART_RTS_HIGH();
+  Serial.write(ano);
+  delay(50); 
+  UART_RTS_LOW();
+  UART_RTS_HIGH();
+    
+  // FINISH
+  Serial.print('F'); 
+  
+  UART_RTS_LOW();
+  
+        
+}
+
+void changeRTC(void){
+
+      readResistiveTouch();
+      switch (stateRTC) {   
+                      
+        case 1:                
+          tft.fillRect(30,110,35,2,BLACK);
+                                    
+        break;
+
+        case 2:   
+          tft.fillRect(30,110,35,2,WHITE);             
+          tft.fillRect(78,110,35,2,BLACK);                 
+        break;
+
+        case 3: 
+          tft.fillRect(78,110,35,2,WHITE);               
+          tft.fillRect(140,110,35,2,BLACK);                 
+        break;
+
+        case 4: 
+          tft.fillRect(140,110,35,2,WHITE);               
+          tft.fillRect(200,110,35,2,BLACK);                 
+        break;
+        
+        case 5:
+          tft.fillRect(200,110,35,2,WHITE);                
+          tft.fillRect(260,110,35,2,BLACK);                 
+        break;
+      }
+
+      
+      if(tp.z < 900 && tp.z > 15){
+
+        //+
+        if(tp.y > 550 && tp.y < 650){           
+
+            switch (stateRTC) {   
+                
+                case 1:                
+                  hora++;
+                    if(hora > 24){
+                       hora = 0;            
+                    }     
+                  delay(100);
+                  tft.fillRect(30,80,40,22,WHITE); 
+                 break;
+                  
+                case 2:  
+                   minutos++;
+                    if(minutos > 59){
+                       minutos = 0;            
+                    }
+                    delay(100);
+                    tft.fillRect(78,80,40,22,WHITE);
+                 break;
+            
+                case 3:
+                   dia++;
+                    if(dia > 31){
+                       dia = 0;            
+                    }
+                    delay(100);
+                    tft.fillRect(140,80,40,22,WHITE);
+                  
+                 break;
+                  
+                case 4:  
+                    mes++;
+                    if(mes > 12){
+                       mes = 0;            
+                    }
+                    delay(100);
+                    tft.fillRect(200,80,40,22,WHITE);
+                 break;
+            
+                 case 5:  
+                    ano++;
+                    if(ano > 99){
+                       ano = 0;            
+                    }
+                    delay(100);
+                    tft.fillRect(260,80,40,22,WHITE);
+                 break;           
+            }
+        }
+        //-
+        if(tp.y > 660 && tp.y < 760){
+          
+          switch (stateRTC) {   
+                
+                case 1:
+                
+                  hora--;
+                    if(hora < 0){
+                       hora = 24;            
+                    }     
+                    delay(100);
+                    tft.fillRect(30,80,40,22,WHITE); 
+                 break;
+                  
+                case 2:  
+                   minutos--;
+                    if(minutos < 0){
+                       minutos = 59;            
+                    }
+                    delay(100);
+                    tft.fillRect(78,80,40,22,WHITE);
+                 break;
+            
+                case 3:
+                   dia--;
+                    if(dia < 0){
+                       dia = 31;            
+                    }
+                    delay(100);
+                    tft.fillRect(140,80,40,22,WHITE);
+                  
+                 break;
+                  
+                case 4:  
+                    mes--;
+                    if(mes < 0){
+                       mes = 12;            
+                    }
+                    delay(100);
+                    tft.fillRect(200,80,40,22,WHITE);
+                 break;
+            
+                 case 5:  
+                    ano--;
+                    if(ano < 0){
+                       ano = 99;            
+                    }
+                    delay(100);
+                    tft.fillRect(260,80,40,22,WHITE);
+                 break;           
+            }
+        }
+        
+        //  OK
+        if(tp.y < 870 && tp.y > 780){
+          stateRTC++;
+          if(stateRTC > 5){
+            
+            stateRTC = 1;
+            state = MENU;
+            aux = 0;
+            sendRTC();
+
+            delay(50); 
+            Serial.write('9'); 
+            delay(50); 
+            Serial.write('9');           
+            }
+          delay(300);
+        }
+      }
+      
+      
+      tft.setTextSize(2);
+      tft.setCursor(120,10);
+      tft.setTextColor(BLACK);
+      tft.setTextSize(3);      
+      tft.setCursor(30,80);      
+      tft.print(hora);      
+      tft.setCursor(65,80);
+      tft.print(":");
+      tft.setCursor(78,80);
+      tft.print(minutos); 
+      tft.setCursor(140,80);
+      tft.print(dia);
+      tft.setCursor(180,80);
+      tft.print("/");
+      tft.setCursor(200,80);
+      tft.print(mes);      
+      tft.setCursor(240,80);
+      tft.print("/");
+      tft.setCursor(260,80);
+      tft.print(ano);
+     
+      
+        
+}
+void defineSTATE(void){
+
+      readResistiveTouch();
+
+       if(tp.z < 900 && tp.z > 15){
+
+      // MENU
+     if(tp.y < 260){
+        state = MENU;
+        UART_RTS_HIGH();
+        Serial.write('9');
+        delay(50);
+        UART_RTS_LOW();
+        aux = 0; 
+      }
+      
+    // INICIAR
+      if(tp.y < 460 && tp.y > 315){
+        state = INICIAR; 
+        aux = 0; 
+        busy = true;
+        UART_RTS_HIGH();
+        Serial.write('1');
+        delay(50); 
+        UART_RTS_LOW();
+        
+        
+        
+      } 
+
+    // GRAFICO
+      if(tp.y < 660 && tp.y > 525){
+       state = GRAFICO;
+        aux = 0; 
+        busy = true;
+        UART_RTS_HIGH();
+        Serial.write('3');
+        delay(50); 
+        UART_RTS_LOW();
+        
+       
+      } 
+
+    // CALENDARIO
+      if(tp.y < 860 && tp.y > 715){
+        state = RTC; 
+        aux = 0; 
+        busy = true;
+        UART_RTS_HIGH();
+        Serial.write('5');
+        delay(50);
+        UART_RTS_LOW();
+        
+       
+    }  
+}
+}
+void ifMENU(void){
+      
+      readResistiveTouch();      
+      
+      if(tp.z < 900 && tp.z > 15){
+
+        // MENU
+        if(tp.y < 260){
+          state = MENU;
+          UART_RTS_HIGH();
+          Serial.write('9');
+          delay(50); 
+          UART_RTS_LOW();
+          aux = 0;
+          stateRTC  = 1; 
+          busy      = false;
+                   
+        }
+      } 
+}
+void ifRESTART(void){
+      
+      readResistiveTouch();      
+      
+      if(tp.z < 900 && tp.z > 15){
+
+        // Reiniciar
+        
+        if(tp.y < 860 && tp.y > 715){
+
+          UART_RTS_HIGH();
+          Serial.write('4');
+          delay(50);
+          UART_RTS_LOW(); 
+          aux = 0;                          
+        }
+      } 
+}
+
+
+void setup()
+{
+
+    pinMode(UART_RTS,OUTPUT);
+    pinMode(MEA_READY,INPUT);
+    
+    Serial.begin(57600);
+    
+    tft.reset();
+    uint16_t id = tft.readID();
+    tft.begin(id);
+    tft.setRotation(1);     //Landscape, for portrat it is 0
+    tft.fillScreen(WHITE);
+
+      // UNOESC
+      
+      tft.setTextColor(BLACK);
+      tft.setTextSize(4);
+      tft.setCursor(20,100);
+      tft.print("UNOESC/IRANI");
+      delay(1000);          
+
+      // MENU
+      tft.fillScreen(WHITE);
+      tft.fillRect(0,0,320,40,BLACK);
+      tft.setTextColor(WHITE);
+      tft.setTextSize(3);
+      tft.setCursor(10,10);
+      tft.print("MENU");
+     /* tft.setTextSize(2);
+      tft.setCursor(120,10);
+      tft.print("00:00 00/00/00"); */
+      
+      showMENU();
+      state = MENU;
+      
+// SERIAL IT  -----------------------------------------------------  
+
+
+}
+void loop(){
+
+
+  ifMENU();
+
+  switch (state) {   
+    
+    case MENU:
+
+      if(aux == 0){
+        showMENU();      
+        aux = 1;
+      }
+      
+      defineSTATE();
+
+      break;
+      
+    case INICIAR:       
+             
+        if(aux == 0){
+
+          tft.fillRect(0,40,320,200,WHITE);
+          tft.setTextColor(BLACK);
+          tft.setTextSize(3);
+          tft.setCursor(25,110);
+          tft.print("Aguarde...");
+          
+          while(!MEA_READY_Read());
+                            
+          tft.fillRect(0,40,320,200,WHITE);
+          tft.setTextColor(BLACK);
+          tft.setTextSize(3);
+          tft.setCursor(25,110);
+          tft.print("FORCA:");
+
+          // BT_RESTART
+          tft.drawRect(64,180,192,45,BLACK);
+          tft.setTextColor(BLACK);
+          tft.setTextSize(3);
+          tft.setCursor(79,192);
+          tft.print("REINICIAR");
+          aux = 1;          
+        }         
+       
+          while (Serial.available()) {
+      
+            char inChar = (char)Serial.read();
+            inpString[n] = inChar;
+            n++;
+      
+            if (inChar == '\0' ) {
+              n=0;
+              stringComplete = true;
+            }
+          }
+          
+          if(stringComplete && inpString[2] != ':'){
+            tft.fillRect(135,40,320,100,WHITE);
+            tft.setCursor(135,110);
+            tft.print(inpString);
+            stringComplete = false;
+          } 
+    
+          //ifMENU();
+          ifRESTART();
+                     
+      break;
+      
+    case GRAFICO:
+    
+      if(aux == 0){
+        showGRAFICO();      
+        aux = 1;         
+      }
+
+           while (Serial.available()) {
+      
+            char inChar = (char)Serial.read();
+            inpString[n] = inChar;
+            n++;
+      
+            if (inChar == '\0' ) {
+              n=0;
+              stringComplete = true;
+            }
+          }
+          
+          if(stringComplete && inpString[2] != ':'){
+            tft.fillRect(135,40,320,100,WHITE);
+            tft.setCursor(135,110);
+            tft.print(inpString);
+            stringComplete = false;
+          } 
+
+         ifMENU();
+    
+          
+
+    
+      break;
+      
+    case RTC:
+    
+      if(aux == 0){
+        showRTC();      
+        aux = 1; 
+      }
+          
+          
+      while (Serial.available()) {
+      
+        char inChar = (char)Serial.read();
+        inpStringTime[n] = inChar;
+        n++;
+      
+        if (inChar == '\0' && inpStringTime[2] == ':') {
+          
+          n=0;
+          tft.fillRect(0,0,320,40,BLACK);
+          tft.setTextColor(WHITE);
+          tft.setTextSize(3);
+          tft.setCursor(10,10);
+          tft.print("MENU");
+          //tft.fillRect(100,0,320,40,BLACK);
+          tft.setTextColor(WHITE);      
+          tft.setTextSize(2);
+          tft.setCursor(135,10);
+          tft.print(inpStringTime);
+            
+     }
+    }
+      
+        changeRTC();
+
+      
+      break;
+ }   
+}
+
