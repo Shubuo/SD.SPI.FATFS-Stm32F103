@@ -18,14 +18,31 @@ MCUFRIEND_kbv tft;
 #define INICIAR           1
 #define GRAFICO           2
 #define RTC               3
+
 #define UART_RTS          13
 #define MEA_READY         12
-#define MEA_READY_Read()  digitalRead(MEA_READY)
-#define UART_RTS_HIGH()   digitalWrite(UART_RTS, HIGH)
-#define UART_RTS_LOW()    digitalWrite(UART_RTS, LOW)
+#define RTC_READY         11
+#define GRA_READY         10
+
+#define GRA_READY_HIGH()    digitalWrite(GRA_READY, HIGH)
+#define GRA_READY_LOW()     digitalWrite(GRA_READY, LOW)
+
+#define RTC_READY_HIGH()    digitalWrite(RTC_READY, HIGH)
+#define RTC_READY_LOW()     digitalWrite(RTC_READY, LOW)
+
+#define MEA_READY_HIGH()    digitalWrite(MEA_READY, HIGH)
+#define MEA_READY_LOW()     digitalWrite(MEA_READY, LOW)
+
+#define UART_RTS_HIGH()     digitalWrite(UART_RTS, HIGH)
+#define UART_RTS_LOW()      digitalWrite(UART_RTS, LOW)
 
 
 //int     UART_RTS = 13;
+
+int     Val_01;        // variavel para valor do buffer 1
+int     Val_02;        // variavel para valor do buffer 2
+int     Val_03;        // variavel para valor do buffer 3
+int     Val_04;        // variavel para valor do buffer 4
 
 int     n=0;
 int     state = 2;
@@ -45,10 +62,18 @@ boolean grafico = false;
 boolean stringComplete = false;  // whether the string is complete
 char    inpString     [8] ;
 String  inString = ""; 
+String  MEA_Data_String;
+float   MEA_Data_Int;
 char    inpStringTime [15] ;
+char    buffer[8];
 boolean busy = false; 
 boolean Done_GRF = false; 
 int     Medida_Grafico = 0;
+float   Div = 0;
+float   Length_X = 0;
+int     nmea = 0;
+String  maior_valor;
+double  MEA_Ready = 0;
 
 // TOUCHSCREEN -----------------------------------------------------
 
@@ -112,11 +137,26 @@ void showMENU(void)
 
 void showINICIAR(void){
 
-      tft.fillRect(0,40,320,200,WHITE);
-      tft.setTextColor(BLACK);
-      tft.setTextSize(3);
-      tft.setCursor(25,132);
-      tft.print("Obtendo Tara...");      
+          tft.fillRect(0,40,320,200,WHITE);
+          tft.setTextColor(BLACK);
+          tft.setTextSize(3);
+          tft.setCursor(25,110);
+          tft.print("Aguarde...");         
+             
+                            
+          tft.fillRect(0,40,320,200,WHITE);
+          tft.setTextColor(BLACK);
+          tft.setTextSize(3);
+          tft.setCursor(25,110);
+          tft.print("FORCA:");
+
+          // BT_RESTART
+          tft.drawRect(64,180,192,45,BLACK);
+          tft.setTextColor(BLACK);
+          tft.setTextSize(3);
+          tft.setCursor(79,192);
+          tft.print("REINICIAR");
+           
 }
 
 void showGRAFICO(void){
@@ -125,11 +165,26 @@ void showGRAFICO(void){
       tft.setTextColor(BLACK);
       tft.setTextSize(3);
       tft.setCursor(25,50);
-      tft.print("Grafico...");
+      tft.drawRect(40,60,1,200,BLACK);
+      tft.setTextSize(1);
+      tft.fillRect(20,225,320,1,BLACK);
+      tft.setCursor(2,55);
+      tft.print("5000"); 
+      tft.setCursor(2,137.5);
+      tft.print("5000"); 
+      tft.setCursor(2,96);
+      tft.print("3750");
+      tft.setCursor(2,179);
+      tft.print("1250");
+      tft.setCursor(2,220);
+      tft.print("0");
+
+
+      
 }
 
-void showRTC(void){
-
+void showRTC_BOTOES(void){
+// BOTOES
       tft.fillRect(0,40,320,200,WHITE);
       
       tft.drawRect(70,50+80,180,30,BLACK);
@@ -384,6 +439,190 @@ void changeRTC(void){
       
         
 }
+/*void setLOTE(void){
+
+      readResistiveTouch();
+      switch (stateLOTE) {   
+                      
+        case 1:                
+          tft.fillRect(30,110,35,2,BLACK);
+                                    
+        break;
+
+        case 2:   
+          tft.fillRect(30,110,35,2,WHITE);             
+          tft.fillRect(78,110,35,2,BLACK);                 
+        break;
+
+        case 3: 
+          tft.fillRect(78,110,35,2,WHITE);               
+          tft.fillRect(140,110,35,2,BLACK);                 
+        break;
+
+        case 4: 
+          tft.fillRect(140,110,35,2,WHITE);               
+          tft.fillRect(200,110,35,2,BLACK);                 
+        break;
+        
+        case 5:
+          tft.fillRect(200,110,35,2,WHITE);                
+          tft.fillRect(260,110,35,2,BLACK);                 
+        break;
+      }
+
+      
+      if(tp.z < 900 && tp.z > 15){
+
+        //+
+        if(tp.y > 550 && tp.y < 650){           
+
+            switch (stateRTC) {   
+                
+                case 1:                
+                  hora++;
+                    if(hora > 24){
+                       hora = 0;            
+                    }     
+                  delay(100);
+                  tft.fillRect(30,80,40,22,WHITE); 
+                 break;
+                  
+                case 2:  
+                   minutos++;
+                    if(minutos > 59){
+                       minutos = 0;            
+                    }
+                    delay(100);
+                    tft.fillRect(78,80,40,22,WHITE);
+                 break;
+            
+                case 3:
+                   dia++;
+                    if(dia > 31){
+                       dia = 0;            
+                    }
+                    delay(100);
+                    tft.fillRect(140,80,40,22,WHITE);
+                  
+                 break;
+                  
+                case 4:  
+                    mes++;
+                    if(mes > 12){
+                       mes = 0;            
+                    }
+                    delay(100);
+                    tft.fillRect(200,80,40,22,WHITE);
+                 break;
+            
+                 case 5:  
+                    ano++;
+                    if(ano > 99){
+                       ano = 0;            
+                    }
+                    delay(100);
+                    tft.fillRect(260,80,40,22,WHITE);
+                 break;           
+            }
+        }
+        //-
+        if(tp.y > 660 && tp.y < 760){
+          
+          switch (stateRTC) {   
+                
+                case 1:
+                
+                  hora--;
+                    if(hora < 0){
+                       hora = 24;            
+                    }     
+                    delay(100);
+                    tft.fillRect(30,80,40,22,WHITE); 
+                 break;
+                  
+                case 2:  
+                   minutos--;
+                    if(minutos < 0){
+                       minutos = 59;            
+                    }
+                    delay(100);
+                    tft.fillRect(78,80,40,22,WHITE);
+                 break;
+            
+                case 3:
+                   dia--;
+                    if(dia < 0){
+                       dia = 31;            
+                    }
+                    delay(100);
+                    tft.fillRect(140,80,40,22,WHITE);
+                  
+                 break;
+                  
+                case 4:  
+                    mes--;
+                    if(mes < 0){
+                       mes = 12;            
+                    }
+                    delay(100);
+                    tft.fillRect(200,80,40,22,WHITE);
+                 break;
+            
+                 case 5:  
+                    ano--;
+                    if(ano < 0){
+                       ano = 99;            
+                    }
+                    delay(100);
+                    tft.fillRect(260,80,40,22,WHITE);
+                 break;           
+            }
+        }
+        
+        //  OK
+        if(tp.y < 870 && tp.y > 780){
+          stateRTC++;
+          if(stateRTC > 5){
+            
+            stateRTC = 1;
+            state = MENU;
+            aux = 0;
+            sendRTC();
+
+            delay(50); 
+            Serial.write('9'); 
+            delay(50); 
+            Serial.write('9');           
+            }
+          delay(300);
+        }
+      }
+      
+      
+      tft.setTextSize(2);
+      tft.setCursor(120,10);
+      tft.setTextColor(BLACK);
+      tft.setTextSize(3);      
+      tft.setCursor(30,80);      
+      tft.print(hora);      
+      tft.setCursor(65,80);
+      tft.print(":");
+      tft.setCursor(78,80);
+      tft.print(minutos); 
+      tft.setCursor(140,80);
+      tft.print(dia);
+      tft.setCursor(180,80);
+      tft.print("/");
+      tft.setCursor(200,80);
+      tft.print(mes);      
+      tft.setCursor(240,80);
+      tft.print("/");
+      tft.setCursor(260,80);
+      tft.print(ano);
+     
+      
+        
+}*/
 void defineSTATE(void){
 
       readResistiveTouch();
@@ -404,11 +643,15 @@ void defineSTATE(void){
       if(tp.y < 460 && tp.y > 315){
         state = INICIAR; 
         aux = 0; 
-        busy = true;
-        UART_RTS_HIGH();
+
+        MEA_READY_HIGH();
+        delay(100); 
+        MEA_READY_LOW();
+        
+       /* UART_RTS_HIGH();
         Serial.write('1');
         delay(50); 
-        UART_RTS_LOW();
+        UART_RTS_LOW();*/
         
         
         
@@ -418,11 +661,15 @@ void defineSTATE(void){
       if(tp.y < 660 && tp.y > 525){
        state = GRAFICO;
         aux = 0; 
-        busy = true;
-        UART_RTS_HIGH();
+                
+        /*UART_RTS_HIGH();
         Serial.write('3');
         delay(50); 
-        UART_RTS_LOW();
+        UART_RTS_LOW();*/
+
+        GRA_READY_HIGH();
+        delay(100); 
+        GRA_READY_LOW();
         
        
       } 
@@ -430,14 +677,7 @@ void defineSTATE(void){
     // CALENDARIO
       if(tp.y < 860 && tp.y > 715){
         state = RTC; 
-        aux = 0; 
-        busy = true;
-        UART_RTS_HIGH();
-        Serial.write('5');
-        delay(50);
-        UART_RTS_LOW();
-        
-       
+        aux = 0;      
     }  
 }
 }
@@ -453,6 +693,8 @@ void ifMENU(void){
           UART_RTS_HIGH();
           Serial.write('9');
           delay(50); 
+          UART_RTS_LOW();
+          UART_RTS_HIGH();
           UART_RTS_LOW();
           aux = 0;
           stateRTC  = 1; 
@@ -479,13 +721,110 @@ void ifRESTART(void){
         }
       } 
 }
+void showMEA_UART(void){
 
+  while (Serial.available()) {
+      
+            char inChar = (char)Serial.read();
+            inpString[n] = inChar;
+            n++;
+      
+            if (inChar == '\0' ) {
+              n=0;
+              stringComplete = true;
+            }
+          }
+          
+          if(stringComplete && inpString[2] != ':'){
+            tft.fillRect(135,40,320,100,WHITE);
+            tft.setCursor(135,110);
+            tft.print(inpString);
+            stringComplete = false;
+            maior_valor = inpString;
+          }   
+}
+void showTIME_BarraMenu_UART(void){
+
+   // MOSTAR TIME BARRA MENU
+
+    UART_RTS_HIGH();
+    Serial.write('@');
+    delay(100);
+    UART_RTS_LOW();
+
+      
+      while (Serial.available()) {
+      
+        char inChar = (char)Serial.read();
+        inpStringTime[n] = inChar;
+        n++;
+      
+        if (inChar == '\0' ) {
+          
+          n=0;
+          tft.fillRect(0,0,320,40,BLACK);
+          tft.setTextColor(WHITE);
+          tft.setTextSize(3);
+          tft.setCursor(10,10);
+          tft.print("MENU");
+          //tft.fillRect(100,0,320,40,BLACK);
+          tft.setTextColor(WHITE);      
+          tft.setTextSize(2);
+          tft.setCursor(135,10);
+          tft.print(inpStringTime);
+            
+     }
+    }
+}
+void showGRA_UART(void){
+
+          while (Serial.available()) {
+      
+            char inChar = (char)Serial.read();
+            inpString[n] = inChar;
+            n++;
+      
+            if (inChar == '\0' ) {
+              n=0;              
+              stringComplete = true;             
+            }
+          }
+          
+          if(stringComplete){           
+
+            Val_01 = inpString[3] & 0x0F;      // Remove parte alta do byte buffer 2
+            Val_02 = inpString[4] & 0x0F;      // Remove parte alta do byte buffer 3     
+            Val_03 = inpString[5] & 0x0F;      // Remove parte alta do byte buffer 4         
+            Val_04 = inpString[6] & 0x0F;      // Remove parte alta do byte buffer 5 
+
+            MEA_Data_String = String(Val_01)+String(Val_02)+String(Val_03)+String(Val_04);
+            MEA_Data_Int = MEA_Data_String.toInt();
+            Serial.println(MEA_Data_Int);
+                    
+            Div         = (225 - (MEA_Data_Int*0.033));
+            
+            Length_X    = 40+5*nmea;
+            tft.fillRect(Length_X,Div,3,3,RED);
+            tft.setCursor(180,45);
+            tft.print(maior_valor);            
+            stringComplete = false;
+            nmea++;              
+          }
+}
 
 void setup()
 {
-
+    
     pinMode(UART_RTS,OUTPUT);
-    pinMode(MEA_READY,INPUT);
+    pinMode(MEA_READY,OUTPUT);
+    pinMode(RTC_READY,OUTPUT);
+    pinMode(GRA_READY,OUTPUT);
+
+    UART_RTS_HIGH();
+    UART_RTS_LOW();
+    MEA_READY_LOW();
+    RTC_READY_LOW();
+    GRA_READY_LOW();
     
     Serial.begin(57600);
     
@@ -523,9 +862,8 @@ void setup()
 }
 void loop(){
 
-
   ifMENU();
-
+ 
   switch (state) {   
     
     case MENU:
@@ -533,130 +871,44 @@ void loop(){
       if(aux == 0){
         showMENU();      
         aux = 1;
-      }
-      
+      }        
       defineSTATE();
 
       break;
       
-    case INICIAR:       
-             
-        if(aux == 0){
-
-          tft.fillRect(0,40,320,200,WHITE);
-          tft.setTextColor(BLACK);
-          tft.setTextSize(3);
-          tft.setCursor(25,110);
-          tft.print("Aguarde...");
-          
-          while(!MEA_READY_Read());
-                            
-          tft.fillRect(0,40,320,200,WHITE);
-          tft.setTextColor(BLACK);
-          tft.setTextSize(3);
-          tft.setCursor(25,110);
-          tft.print("FORCA:");
-
-          // BT_RESTART
-          tft.drawRect(64,180,192,45,BLACK);
-          tft.setTextColor(BLACK);
-          tft.setTextSize(3);
-          tft.setCursor(79,192);
-          tft.print("REINICIAR");
-          aux = 1;          
-        }         
-       
-          while (Serial.available()) {
-      
-            char inChar = (char)Serial.read();
-            inpString[n] = inChar;
-            n++;
-      
-            if (inChar == '\0' ) {
-              n=0;
-              stringComplete = true;
-            }
-          }
-          
-          if(stringComplete && inpString[2] != ':'){
-            tft.fillRect(135,40,320,100,WHITE);
-            tft.setCursor(135,110);
-            tft.print(inpString);
-            stringComplete = false;
-          } 
-    
-          //ifMENU();
-          ifRESTART();
+    case INICIAR:
+                 
+      if(aux == 0){          
+         aux = 1; 
+         showINICIAR();         
+        } 
+      showMEA_UART(); 
+      ifRESTART();
                      
       break;
       
-    case GRAFICO:
+    case GRAFICO:    
     
       if(aux == 0){
-        showGRAFICO();      
-        aux = 1;         
-      }
-
-           while (Serial.available()) {
+        showGRAFICO();           
+        aux = 1;  
+        nmea =0;       
+      }           
+      showGRA_UART(); 
+      ifMENU();
       
-            char inChar = (char)Serial.read();
-            inpString[n] = inChar;
-            n++;
-      
-            if (inChar == '\0' ) {
-              n=0;
-              stringComplete = true;
-            }
-          }
-          
-          if(stringComplete && inpString[2] != ':'){
-            tft.fillRect(135,40,320,100,WHITE);
-            tft.setCursor(135,110);
-            tft.print(inpString);
-            stringComplete = false;
-          } 
-
-         ifMENU();
-    
-          
-
-    
       break;
       
     case RTC:
     
       if(aux == 0){
-        showRTC();      
+        showRTC_BOTOES();
+        showTIME_BarraMenu_UART();      
         aux = 1; 
-      }
-          
-          
-      while (Serial.available()) {
-      
-        char inChar = (char)Serial.read();
-        inpStringTime[n] = inChar;
-        n++;
-      
-        if (inChar == '\0' && inpStringTime[2] == ':') {
-          
-          n=0;
-          tft.fillRect(0,0,320,40,BLACK);
-          tft.setTextColor(WHITE);
-          tft.setTextSize(3);
-          tft.setCursor(10,10);
-          tft.print("MENU");
-          //tft.fillRect(100,0,320,40,BLACK);
-          tft.setTextColor(WHITE);      
-          tft.setTextSize(2);
-          tft.setCursor(135,10);
-          tft.print(inpStringTime);
+      }      
+        
+      changeRTC();
             
-     }
-    }
-      
-        changeRTC();
-
-      
       break;
  }   
 }
