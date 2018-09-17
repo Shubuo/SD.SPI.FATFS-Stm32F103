@@ -3,21 +3,22 @@
 #include "ff_gen_drv.h"
 #include "user_diskio.h"
 
-#define CMD0 		(0x40+0) // GO_IDLE_STATE
-#define CMD1 		(0x40+1) // SEND_OP_COND (MMC)
+#define CMD0 		(0x40+0) 	// GO_IDLE_STATE
+#define CMD1 		(0x40+1) 	// SEND_OP_COND (MMC)
 #define ACMD41 	(0xC0+41) // SEND_OP_COND (SDC)
-#define CMD8 		(0x40+8) // SEND_IF_COND
-#define CMD9 		(0x40+9) // SEND_CSD
-#define CMD16 (0x40+16) // SET_BLOCKLEN
-#define CMD17 (0x40+17) // READ_SINGLE_BLOCK
-#define CMD24 (0x40+24) // WRITE_BLOCK
-#define CMD55 (0x40+55) // APP_CMD
-#define CMD58 (0x40+58) // READ_OCR
+#define CMD8 		(0x40+8) 	// SEND_IF_COND
+#define CMD9 		(0x40+9) 	// SEND_CSD
+#define CMD16 	(0x40+16) // SET_BLOCKLEN
+#define CMD17 	(0x40+17) // READ_SINGLE_BLOCK
+#define CMD24 	(0x40+24) // WRITE_BLOCK
+#define CMD55 	(0x40+55) // APP_CMD
+#define CMD58 	(0x40+58) // READ_OCR
 
-#define CS_SD_GPIO_PORT GPIOA
-#define CS_SD_PIN GPIO_PIN_3
-#define CS_SD_LOW() HAL_GPIO_WritePin(CS_SD_GPIO_PORT, CS_SD_PIN, GPIO_PIN_RESET)
-#define CS_SD_HIGH() HAL_GPIO_WritePin(CS_SD_GPIO_PORT, CS_SD_PIN, GPIO_PIN_SET)
+//#define CS_SD_GPIO_PORT GPIOA
+//#define CS_SD_PIN GPIO_PIN_3
+
+#define CS_SD_LOW() HAL_GPIO_WritePin(CS_SD_GPIO_Port, CS_SD_Pin, GPIO_PIN_RESET)
+#define CS_SD_HIGH() HAL_GPIO_WritePin(CS_SD_GPIO_Port, CS_SD_Pin, GPIO_PIN_SET)
 
 extern SPI_HandleTypeDef hspi2;
 uint8_t i = 0;

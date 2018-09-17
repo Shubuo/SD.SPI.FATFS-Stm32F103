@@ -94,7 +94,8 @@
 #define RELE2_LOW() 			HAL_GPIO_WritePin(Rele_Motor_2_GPIO_Port, Rele_Motor_2_Pin, GPIO_PIN_RESET)
 #define RELE2_HIGH() 			HAL_GPIO_WritePin(Rele_Motor_2_GPIO_Port, Rele_Motor_2_Pin, GPIO_PIN_SET)
 
-#define FC_UP_Read() 			HAL_GPIO_ReadPin(FC_UP_GPIO_Port, FC_UP_Pin)
+#define FC_UP_IsFree() 			HAL_GPIO_ReadPin(FC_IT_0_GPIO_Port, FC_IT_0_Pin)
+#define FC_DOWN_IsFree() 		HAL_GPIO_ReadPin(FC_DOWN_IT_GPIO_Port, FC_DOWN_IT_Pin)
 
 #define MEA_READY_HIGH() 	HAL_GPIO_WritePin(MEA_READY_GPIO_Port, MEA_READY_Pin, GPIO_PIN_SET)
 #define MEA_READY_LOW() 	HAL_GPIO_WritePin(MEA_READY_GPIO_Port, MEA_READY_Pin, GPIO_PIN_RESET)
@@ -118,6 +119,7 @@ RTC_TimeTypeDef sTime;
 
 extern int 	i;
 bool 				DoneGRF = false;
+bool 				DoNotIT = false;
 
 uint8_t				estado = 0;
 uint8_t				teste = 0;
@@ -135,7 +137,10 @@ int 			Recebendo = 0;
 uint8_t 	UART_H1[5];
 uint8_t 	UART_RX[1];
 uint8_t		UART_LAST_RX[1];
+char			UART_LOTE[6];
+
 char 			UART_MEA_SEND[8] = {0};
+char 			UART_RTC_SEND[15] = {0};
 
 // ----------------------------------- MEDICAO -------------------------------------
 
@@ -149,7 +154,7 @@ double	UART_AUX_Sending			= 0;
 bool		MEA_Abort 						= false;
 bool		Sending_Vector				= true;
 bool		Start_MEA							= true;
-
+bool		Waiting_Lote_UART			= true;
 
 // ----------------------------------- uSD -------------------------------------
 
@@ -162,7 +167,6 @@ char 				USER_Path[4]; /* logical drive path */
 // ----------------------------------- RTC -------------------------------------
 
 signed int	horas 		= 12;
-signed int	hora 		  = 12;
 signed int	minutos 	= 30;
 signed int	segundos 	= 50;
 signed int	dia 			= 15;
@@ -251,7 +255,7 @@ void					FIR_vector(int M, double vector[],double vector_F[],int N){
 	}
 }
 
-	FRESULT open_append (
+FRESULT open_append (
     FIL* fp,            /* [OUT] File object to create */
     const char* path    /* [IN]  File name to be opened */
 	)
@@ -310,6 +314,35 @@ void 					LCD_ShowRTC(void){
 	LCD_CURSOR(1,20);
 
 }
+void 					Motor_UP(void){
+		
+	
+	RELE2_HIGH();
+	RELE1_LOW();
+	
+}
+void 					Motor_DOWN(void){
+	
+	RELE2_LOW();
+	RELE1_HIGH();
+	
+}
+void 					Motor_Stop_From_UP(void){
+		
+	RELE2_LOW();	
+	
+}
+void 					Motor_Stop_From_DOWN(void){
+	
+	RELE1_LOW();
+		
+}
+void 					Motor_Stop_All(void){
+	
+	RELE1_LOW();
+	RELE2_LOW();
+		
+}
 
 void 					SD_Backup(unsigned long dataForce){
 	
@@ -337,6 +370,8 @@ void 					SD_Backup(unsigned long dataForce){
 							else{														
 								Update_RTC();					
 								f_printf(&MyFile, "Data: %02u/%02u/%u, %2u:%02u\n",dia,mes,ano,horas,minutos);
+								f_printf(&MyFile, "LOTE: ");
+								f_printf(&MyFile, UART_LOTE);
 								f_printf(&MyFile, "FORCA: %lu \n",dataForce);			
 								f_close(&MyFile);
 								
@@ -497,12 +532,17 @@ void 					Wait_Start_Measuring(int Peso_Minimo){
 	
 	Force = fabs((aForce - Tara)*(0.00238));
 	
-	//MEA_Abort = false;
-	
 	while( !UART_RX_FLAG && Force < Peso_Minimo){	
 		
 		aForce = ReadCount();	
 		Force = fabs((aForce - Tara)*(0.00238));
+		
+		if(!FC_DOWN_IsFree()){
+			Motor_Stop_All();
+			HAL_Delay(200);
+			Motor_UP();
+			break;
+		}
 	}
 	
 }
@@ -515,7 +555,6 @@ void 					Measuring(void){
 		
 						LCD_CURSOR(0,0);
 						sprintf(UART_MEA_SEND,"%7.2f",Force);						
-						ENVIA_STRING_LCD(UART_MEA_SEND);				
 						HAL_UART_Transmit_IT(&huart3, UART_MEA_SEND ,sizeof(UART_MEA_SEND));
 	}
 	
@@ -556,41 +595,41 @@ double 				Maior_Valor_Vector(double Aux_Vector[]){
 
 void					UART_Received(void){
 
+	
 	HAL_UART_Receive(&huart3,UART_RX,sizeof(UART_RX),250);
-		
+	
+	
 		if(UART_RX[0] == '@'){			
 			
-			
-			
-			
+			Update_RTC();
+			sprintf(UART_MEA_SEND,"%02u:%02u %02u/%02u/%02u",horas,minutos,dia,mes,ano);									
+			HAL_UART_Transmit(&huart3, UART_MEA_SEND ,15,250);
 									
 		}
 		
-		if(UART_RX[0] == 'H'){			
-			Recebendo = 1;						
-		}
-		
-		else if(UART_RX[0] == 'F'){			
-			n =0;
-			Recebendo = 0;	
-			updateRTC	= true;		
-		}
-		
-		if(Recebendo == 1){
+		else if(UART_RX[0] == 'L'){
 			
-			if(UART_RX[0] != 'H'){
-				UART_H1[n] = UART_RX[0];
-				n++;
-				Recebendo = 0;
-			}
-		}	
-	
+			HAL_UART_Receive(&huart3,UART_LOTE,sizeof(UART_LOTE),400);
+			Waiting_Lote_UART = false;
+			
+		}
+		
+		else if(UART_RX[0] == 'H'){			
+			Recebendo = 1;
+			HAL_UART_Receive(&huart3,UART_H1,sizeof(UART_H1),400);
+			updateRTC	= true;
+		}
 		
 		else if(UART_RX[0] == '4'){
-			Start_MEA = true;			
+			Start_MEA = false;
+			Waiting_Lote_UART = false;
+			estado = 0x01;
+			teste = 0;	
+			HAL_Delay(1000);
 		}
-		
-		else if(UART_RX[0] == '9'){
+
+
+		else {
 			estado = 0x09;
 			teste = 0;
 			MEA_Abort = true;
@@ -644,8 +683,14 @@ int main(void)
 	HAL_Delay(200);
 	ENVIA_STRING_LCD("MENU");
 	
-	if(FC_UP_Read()){	
-		RELE2_HIGH();
+	
+
+	if(!FC_UP_IsFree()){	
+		Motor_Stop_All();
+	}
+	
+		if(FC_UP_IsFree()){	
+		Motor_UP();
 	}
 	
   /* USER CODE END 2 */
@@ -653,27 +698,7 @@ int main(void)
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1){
-		
-//		while(!FimCurso_UP_Read()){
-//			RELE2_HIGH() ;
-//			ENVIA_STRING_LCD("1on1");
 
-//		}
-//		while(!FimCurso_DOWN_Read()){
-//			RELE1_HIGH() ;
-//			ENVIA_STRING_LCD("2on2");
-
-//		}
-//		
-//		RELE2_LOW();
-//		RELE1_LOW();
-//		ENVIA_STRING_LCD("OFF");
-		
-		
-		if(updateRTC){
-			Update_From_User_RTC();
-			updateRTC = false;
-		}
 		
 		if(UART_RX_FLAG){
 			UART_Received();
@@ -686,11 +711,9 @@ int main(void)
 			{				
 				if(Start_MEA){
 					
-					
+					HAL_Delay(200);
 					Start_MEA = false;
-					LCD_LIMPA();
-					ENVIA_STRING_LCD("INICIAR");
-										
+															
 					LCD_LIMPA();
 					ENVIA_STRING_LCD("Tara");
 					
@@ -700,12 +723,21 @@ int main(void)
 					for(i=0;i<100;i++){
 						Vector_MEA[i] = 0;
 					}
+					LCD_LIMPA();
+					ENVIA_STRING_LCD("Aguardando LOTE");
+				}
+				
+				if(!Waiting_Lote_UART){
 					
+					Waiting_Lote_UART = true;
+					LCD_LIMPA();
 					ENVIA_STRING_LCD("Aguardando Ini.");
-																
-					RELE1_HIGH();																				//	Ativa o motor	
+																						
+					Motor_DOWN();																				//	Ativa o motor	
 					Wait_Start_Measuring(100);													//	Esperar ate 100gramas		
 					LCD_LIMPA();
+					
+					
 					Measuring_Vector(Vector_MEA);
 					Maior_Valor = Maior_Valor_Vector(Vector_MEA);					
 							
@@ -715,12 +747,13 @@ int main(void)
 							Vector_Last_MEA[i] = Vector_MEA[i];
 						}
 					}
-					RELE1_LOW();																				//	Desliga motor
+					
+					Motor_Stop_All();																				//	Desliga motor
+					HAL_Delay(800);																									
 					sprintf(UART_MEA_SEND,"%7.2f",Maior_Valor);									
 					HAL_UART_Transmit(&huart3, UART_MEA_SEND ,sizeof(UART_MEA_SEND),250);
-					RELE2_HIGH();
-																								
-
+					Motor_UP();
+										
 				}			
 				
 					
@@ -768,12 +801,22 @@ int main(void)
 					ENVIA_STRING_LCD("MENU");
 					teste = 1;
 					DoneGRF 				= false;
-					Sending_Vector 	= true;		
+					Sending_Vector 	= true;	
+					Waiting_Lote_UART = true;					
 					
 				}
+
+				if(updateRTC){
+					Update_From_User_RTC();
+					updateRTC = false;
+				}
 							      
-			break; 
+				break; 
 			}
+			
+			default:
+				estado = 0x09;
+				
 		}
   /* USER CODE END WHILE */
 
@@ -956,12 +999,11 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_3|DB4_Pin|DB5_Pin|DB6_Pin 
-                          |DB7_Pin|Rele_Motor_2_Pin|Rele_Motor_1_Pin|E_Pin 
-                          |RS_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOA, DB4_Pin|DB5_Pin|DB6_Pin|CS_SD_Pin 
+                          |Rele_Motor_1_Pin|Rele_Motor_2_Pin|E_Pin|RS_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(HX_SCK_GPIO_Port, HX_SCK_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOB, HX_SCK_Pin|DB7_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin : PC13 */
   GPIO_InitStruct.Pin = GPIO_PIN_13;
@@ -971,28 +1013,20 @@ static void MX_GPIO_Init(void)
 
   /*Configure GPIO pin : FC_IT_0_Pin */
   GPIO_InitStruct.Pin = FC_IT_0_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
   GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(FC_IT_0_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : FC_UP_Pin */
-  GPIO_InitStruct.Pin = FC_UP_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_PULLUP;
-  HAL_GPIO_Init(FC_UP_GPIO_Port, &GPIO_InitStruct);
-
-  /*Configure GPIO pin : MEA_Pin_I9_Pin */
-  GPIO_InitStruct.Pin = MEA_Pin_I9_Pin;
+  /*Configure GPIO pins : MEA_Pin_I9_Pin GRA_Pin_I7_Pin */
+  GPIO_InitStruct.Pin = MEA_Pin_I9_Pin|GRA_Pin_I7_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
   GPIO_InitStruct.Pull = GPIO_PULLDOWN;
-  HAL_GPIO_Init(MEA_Pin_I9_GPIO_Port, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : PA3 DB4_Pin DB5_Pin DB6_Pin 
-                           DB7_Pin Rele_Motor_2_Pin Rele_Motor_1_Pin E_Pin 
-                           RS_Pin */
-  GPIO_InitStruct.Pin = GPIO_PIN_3|DB4_Pin|DB5_Pin|DB6_Pin 
-                          |DB7_Pin|Rele_Motor_2_Pin|Rele_Motor_1_Pin|E_Pin 
-                          |RS_Pin;
+  /*Configure GPIO pins : DB4_Pin DB5_Pin DB6_Pin CS_SD_Pin 
+                           Rele_Motor_1_Pin Rele_Motor_2_Pin E_Pin RS_Pin */
+  GPIO_InitStruct.Pin = DB4_Pin|DB5_Pin|DB6_Pin|CS_SD_Pin 
+                          |Rele_Motor_1_Pin|Rele_Motor_2_Pin|E_Pin|RS_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
@@ -1000,26 +1034,26 @@ static void MX_GPIO_Init(void)
   /*Configure GPIO pin : UART_CTS_Pin */
   GPIO_InitStruct.Pin = UART_CTS_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Pull = GPIO_PULLDOWN;
   HAL_GPIO_Init(UART_CTS_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : FC_DOWN_IT_Pin */
+  GPIO_InitStruct.Pin = FC_DOWN_IT_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  HAL_GPIO_Init(FC_DOWN_IT_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pin : HX_DT_Pin */
   GPIO_InitStruct.Pin = HX_DT_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Pull = GPIO_PULLDOWN;
   HAL_GPIO_Init(HX_DT_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : HX_SCK_Pin */
-  GPIO_InitStruct.Pin = HX_SCK_Pin;
+  /*Configure GPIO pins : HX_SCK_Pin DB7_Pin */
+  GPIO_InitStruct.Pin = HX_SCK_Pin|DB7_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(HX_SCK_GPIO_Port, &GPIO_InitStruct);
-
-  /*Configure GPIO pin : GRA_Pin_I7_Pin */
-  GPIO_InitStruct.Pin = GRA_Pin_I7_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
-  GPIO_InitStruct.Pull = GPIO_PULLDOWN;
-  HAL_GPIO_Init(GRA_Pin_I7_GPIO_Port, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   /* EXTI interrupt init*/
   HAL_NVIC_SetPriority(EXTI0_IRQn, 0, 0);
@@ -1030,6 +1064,9 @@ static void MX_GPIO_Init(void)
 
   HAL_NVIC_SetPriority(EXTI2_IRQn, 0, 0);
   HAL_NVIC_EnableIRQ(EXTI2_IRQn);
+
+  HAL_NVIC_SetPriority(EXTI3_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI3_IRQn);
 
   HAL_NVIC_SetPriority(EXTI9_5_IRQn, 0, 0);
   HAL_NVIC_EnableIRQ(EXTI9_5_IRQn);
@@ -1043,16 +1080,21 @@ void HAL_GPIO_EXTI_Callback (uint16_t GPIO_Pin){
 	if(!UART_RX_FLAG){
 
 	 if (GPIO_Pin == FC_IT_0_Pin){		
-		RELE1_LOW();
-		RELE2_LOW();	
+		Motor_Stop_From_UP();	
 	}
 
 	 else if(GPIO_Pin == GRA_Pin_I7_Pin){
 		 
-		 estado = 0x03;
-		 teste = 0;
-	 
+		estado = 0x03;
+		teste = 0;
+		DoneGRF =false;
+		 
 	 }
+	 
+	 else if(GPIO_Pin == FC_DOWN_IT_Pin){
+		 
+		Motor_Stop_From_DOWN();		
+	 }	 
  }
 }
 
